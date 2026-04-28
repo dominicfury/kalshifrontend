@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Activity, ExternalLink, Zap } from "lucide-react";
 import Link from "next/link";
 
+import { AIChatTrigger } from "@/components/ai/ai-chat";
 import { AutoRefresh } from "@/components/layout/auto-refresh";
 import { SignalFilterBar } from "@/components/filters/signal-filters";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/section";
 import { SortHeader } from "@/components/ui/sort-header";
-import { ago, num, pct, teamLabel } from "@/lib/format";
+import { ago, kalshiUrl, num, pct, teamLabel } from "@/lib/format";
 import {
   fetchRecentSignals,
   type SignalFilters,
@@ -184,7 +185,7 @@ export default async function SignalsPage({
         title="Kalshi +EV signals"
         description="Each row is a Kalshi NHL contract priced below fair value. 'Fair' is the multi-book sportsbook consensus (used as the oracle, not as a bet target — you can only trade on Kalshi). Click a row to see the per-book breakdown and buy."
         actions={
-          <div className="flex items-center gap-3 text-xs text-zinc-400">
+          <div className="flex items-center gap-3 text-xs text-zinc-300">
             <AutoRefresh intervalMs={30_000} />
             <span className="inline-flex items-center gap-1.5">
               <Activity className="size-3.5" />
@@ -197,9 +198,39 @@ export default async function SignalsPage({
               </Badge>
             )}
             {withClv > 0 && (
-              <span className="text-zinc-500">
+              <span className="text-zinc-300">
                 {positiveClv}/{withClv} CLV+
               </span>
+            )}
+            {signals.length > 0 && (
+              <AIChatTrigger
+                variant="button"
+                context={{
+                  type: "all_signals",
+                  title: "AI summary of all signals",
+                  payload: signals.slice(0, 25).map((s) => ({
+                    id: s.id,
+                    matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
+                    market_type: s.market_type,
+                    line: s.line,
+                    side: s.side,
+                    kalshi_yes_ask: s.kalshi_yes_ask,
+                    kalshi_no_ask: s.kalshi_no_ask,
+                    fair_yes_prob: s.fair_yes_prob,
+                    edge_pct_after_fees: s.edge_pct_after_fees,
+                    edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
+                    yes_book_depth: s.yes_book_depth,
+                    n_books_used: s.n_books_used,
+                    book_staleness_sec: s.book_staleness_sec,
+                    kalshi_staleness_sec: s.kalshi_staleness_sec,
+                    clv_pct: s.clv_pct,
+                    detected_at: s.detected_at,
+                    ticker: s.ticker,
+                  })),
+                  seedPrompt:
+                    "Rank these signals from most-actionable to most-suspicious. Flag any that look like data bugs vs real edges. Be terse.",
+                }}
+              />
             )}
           </div>
         }
@@ -388,16 +419,47 @@ export default async function SignalsPage({
                   )}
                 </Td>
                 <Td>
-                  <a
-                    href={`https://kalshi.com/markets/${s.ticker}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-md bg-sky-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-sky-400"
-                    title={`Buy ${s.side.toUpperCase()} on Kalshi at ${(s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask).toFixed(3)}`}
-                  >
-                    Buy {s.side.toUpperCase()}
-                    <ExternalLink className="size-3" />
-                  </a>
+                  <div className="inline-flex items-center gap-1">
+                    <a
+                      href={kalshiUrl(s.ticker)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md bg-sky-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-sky-400"
+                      title={`Buy ${s.side.toUpperCase()} on Kalshi at ${(s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask).toFixed(3)}`}
+                    >
+                      Buy {s.side.toUpperCase()}
+                      <ExternalLink className="size-3" />
+                    </a>
+                    <AIChatTrigger
+                      variant="icon"
+                      context={{
+                        type: "single_signal",
+                        title: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)} · ${s.market_type.toUpperCase()}${s.line != null ? ` ${s.line}` : ""} ${s.side.toUpperCase()}`,
+                        payload: {
+                          id: s.id,
+                          ticker: s.ticker,
+                          matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
+                          market_type: s.market_type,
+                          line: s.line,
+                          side: s.side,
+                          kalshi_yes_ask: s.kalshi_yes_ask,
+                          kalshi_no_ask: s.kalshi_no_ask,
+                          fair_yes_prob: s.fair_yes_prob,
+                          edge_pct_after_fees: s.edge_pct_after_fees,
+                          edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
+                          yes_book_depth: s.yes_book_depth,
+                          n_books_used: s.n_books_used,
+                          book_staleness_sec: s.book_staleness_sec,
+                          kalshi_staleness_sec: s.kalshi_staleness_sec,
+                          clv_pct: s.clv_pct,
+                          detected_at: s.detected_at,
+                          start_time: s.start_time,
+                        },
+                        seedPrompt:
+                          "Explain this signal in plain English, why it's flagged as +EV, how to place the bet on Kalshi, and the biggest risk.",
+                      }}
+                    />
+                  </div>
                 </Td>
               </Tr>
             ))}

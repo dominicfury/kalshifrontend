@@ -9,14 +9,17 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.53",
     "@libsql/client": "^0.14.0",
+    "ai": "^6.0.168",
     "clsx": "^2.1.1",
     "lucide-react": "^1.11.0",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^2.13.0",
-    "swr": "^2.2.5"
+    "swr": "^2.2.5",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -27,6 +27,24 @@ export function ago(iso: string | null): string {
   return `${Math.round(sec / 86400)}d`;
 }
 
+/** Kalshi market URL.
+ *
+ * Full ticker URLs (e.g. /markets/KXNHLGAME-26APR29MTLTB-TB) currently
+ * 404 on Kalshi's site. The event-level page exists at the lowercased
+ * event_ticker, which we derive by stripping the side suffix.
+ *
+ * Examples:
+ *   KXNHLGAME-26APR29MTLTB-TB  → /markets/kxnhlgame-26apr29mtltb
+ *   KXNHLSPREAD-26APR29MTLTB-TB2 → /markets/kxnhlspread-26apr29mtltb
+ *   KXNHLTOTAL-26APR29MTLTB-9  → /markets/kxnhltotal-26apr29mtltb
+ */
+export function kalshiUrl(ticker: string): string {
+  const eventTicker = ticker.includes("-")
+    ? ticker.slice(0, ticker.lastIndexOf("-"))
+    : ticker;
+  return `https://kalshi.com/markets/${eventTicker.toLowerCase()}`;
+}
+
 export function teamLabel(slug: string): string {
   return slug
     .split("_")

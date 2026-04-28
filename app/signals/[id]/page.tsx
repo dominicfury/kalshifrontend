@@ -2,12 +2,13 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { AIChatTrigger } from "@/components/ai/ai-chat";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DataTable, TBody, Td, THead, Th, Tr } from "@/components/ui/data-table";
 import { PageHeader, Section } from "@/components/ui/section";
 import { Stat } from "@/components/ui/stat";
-import { ago, num, pct, teamLabel } from "@/lib/format";
+import { ago, kalshiUrl, num, pct, teamLabel } from "@/lib/format";
 import { fetchSignalDetail } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function SignalDetailPage({
       </Link>
 
       <PageHeader
-        eyebrow={`Signal #${s.id} · ${ago(s.detected_at)} ago`}
+        eyebrow={`Signal #${s.id} · ${ago(s.detected_at)} ago · ${s.ticker}`}
         title={
           <span className="inline-flex items-center gap-3">
             {matchup}
@@ -52,15 +53,49 @@ export default async function SignalDetailPage({
         }
         description={s.raw_title}
         actions={
-          <a
-            href={`https://kalshi.com/markets/${s.ticker}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md bg-sky-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-sky-400"
-          >
-            Buy {s.side.toUpperCase()} on Kalshi
-            <ExternalLink className="size-3.5" />
-          </a>
+          <div className="flex items-center gap-2">
+            <AIChatTrigger
+              variant="button"
+              context={{
+                type: "single_signal",
+                title: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)} · ${s.market_type.toUpperCase()}${s.line != null ? ` ${s.line}` : ""} ${s.side.toUpperCase()}`,
+                payload: {
+                  id: s.id,
+                  ticker: s.ticker,
+                  raw_title: s.raw_title,
+                  matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
+                  market_type: s.market_type,
+                  line: s.line,
+                  side: s.side,
+                  kalshi_yes_ask: s.kalshi_yes_ask,
+                  kalshi_no_ask: s.kalshi_no_ask,
+                  fair_yes_prob: s.fair_yes_prob,
+                  edge_pct_after_fees: s.edge_pct_after_fees,
+                  edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
+                  expected_fill_price: s.expected_fill_price,
+                  yes_book_depth: s.yes_book_depth,
+                  n_books_used: s.n_books_used,
+                  book_staleness_sec: s.book_staleness_sec,
+                  kalshi_staleness_sec: s.kalshi_staleness_sec,
+                  clv_pct: s.clv_pct,
+                  detected_at: s.detected_at,
+                  start_time: s.start_time,
+                  contributing_books: detail.contributing_books.slice(0, 12),
+                },
+                seedPrompt:
+                  "Explain this signal in plain English, why it's flagged as +EV, how to place the bet on Kalshi, and the biggest risk to be aware of.",
+              }}
+            />
+            <a
+              href={kalshiUrl(s.ticker)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-sky-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-sky-400"
+            >
+              Buy {s.side.toUpperCase()} on Kalshi
+              <ExternalLink className="size-3.5" />
+            </a>
+          </div>
         }
       />
 
