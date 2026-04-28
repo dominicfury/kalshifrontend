@@ -120,7 +120,7 @@ export default function BetForm({ signals }: { signals: OpenSignalForBet[] }) {
           {KNOWN_TAGS.map((t) => (
             <label
               key={t}
-              className="cursor-pointer select-none rounded-md border border-zinc-800 bg-zinc-900/40 px-2.5 py-1 text-xs font-mono text-zinc-300 transition-colors hover:border-zinc-700 has-checked:border-sky-500/60 has-checked:bg-sky-950/40 has-checked:text-sky-200"
+              className="cursor-pointer select-none rounded-md border border-zinc-700 bg-zinc-900/60 px-2.5 py-1 text-xs font-mono text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800 has-checked:border-sky-400/70 has-checked:bg-sky-500/15 has-checked:text-sky-100"
             >
               <input
                 type="checkbox"
@@ -142,7 +142,7 @@ export default function BetForm({ signals }: { signals: OpenSignalForBet[] }) {
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-emerald-950 transition-colors hover:bg-emerald-500 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-400 disabled:opacity-50"
         >
           {pending ? (
             <>
@@ -191,7 +191,7 @@ function Field({
 }) {
   return (
     <label className={cn("block", className)}>
-      <div className="mb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+      <div className="mb-1 text-[11px] uppercase tracking-[0.12em] font-medium text-zinc-300">
         {label}
       </div>
       {children}

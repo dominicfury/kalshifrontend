@@ -32,9 +32,9 @@ export function Stat({
         className,
       )}
     >
-      <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-zinc-400">
         <span>{label}</span>
-        {icon && <span className="text-zinc-600">{icon}</span>}
+        {icon && <span className="text-zinc-500">{icon}</span>}
       </div>
       <div
         className={cn(
@@ -44,7 +44,7 @@ export function Stat({
       >
         {value}
       </div>
-      {hint && <div className="mt-1 text-xs text-zinc-500">{hint}</div>}
+      {hint && <div className="mt-1 text-xs text-zinc-400">{hint}</div>}
     </div>
   );
 }

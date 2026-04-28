@@ -20,7 +20,7 @@ export function DataTable({
 
 export function THead({ children }: { children: React.ReactNode }) {
   return (
-    <thead className="bg-zinc-900/60 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+    <thead className="bg-zinc-900/60 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
       {children}
     </thead>
   );
@@ -89,11 +89,11 @@ export function Td({
   return (
     <td
       className={cn(
-        "px-3 py-2 whitespace-nowrap",
+        "px-3 py-2 whitespace-nowrap text-zinc-200",
         align === "right" && "text-right",
         align === "center" && "text-center",
         mono && "font-mono tabular-nums",
-        muted && "text-zinc-500",
+        muted && "text-zinc-400",
         className,
       )}
     >

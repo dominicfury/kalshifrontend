@@ -17,10 +17,10 @@ function Chip({ label, active, href, hint }: ChipProps) {
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
         active
-          ? "border-sky-500/60 bg-sky-950/50 text-sky-200"
-          : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200",
+          ? "border-sky-400/60 bg-sky-500/15 text-sky-100 shadow-sm"
+          : "border-zinc-700 bg-zinc-900/60 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-50",
       )}
     >
       {label}
@@ -70,7 +70,7 @@ export function SignalFilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[10px] uppercase tracking-[0.16em] text-zinc-500 mr-1">
+      <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-300 mr-1">
         filter
       </span>
       <Chip
@@ -102,9 +102,9 @@ export function SignalFilterBar({
       {anyFilter && (
         <Link
           href="/"
-          className="ml-2 text-xs text-zinc-500 hover:text-zinc-300 underline"
+          className="ml-2 text-xs text-zinc-300 hover:text-zinc-100 underline"
         >
-          clear
+          clear filters
         </Link>
       )}
       <span className="ml-auto">

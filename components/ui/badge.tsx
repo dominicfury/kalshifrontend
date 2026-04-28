@@ -19,10 +19,10 @@ interface BadgeProps {
 const VARIANT_CLASSES: Record<Variant, string> = {
   default: "bg-zinc-800 text-zinc-200 border-zinc-700",
   muted: "bg-zinc-900 text-zinc-400 border-zinc-800",
-  positive: "bg-emerald-950/60 text-emerald-300 border-emerald-900/80",
-  negative: "bg-rose-950/60 text-rose-300 border-rose-900/80",
-  warning: "bg-amber-950/60 text-amber-300 border-amber-900/80",
-  info: "bg-sky-950/60 text-sky-300 border-sky-900/80",
+  positive: "bg-emerald-500/15 text-emerald-200 border-emerald-500/40",
+  negative: "bg-rose-500/15 text-rose-200 border-rose-500/40",
+  warning: "bg-amber-500/15 text-amber-200 border-amber-500/40",
+  info: "bg-sky-500/15 text-sky-200 border-sky-500/40",
   outline: "bg-transparent text-zinc-300 border-zinc-700",
 };
 

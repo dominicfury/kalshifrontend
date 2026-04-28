@@ -32,18 +32,18 @@ export default async function LiveIndicator() {
   const bTone = tone(lastB, 300);
 
   return (
-    <div className="hidden md:flex items-center gap-4 text-[11px] text-zinc-500 font-mono tabular-nums">
+    <div className="hidden md:flex items-center gap-4 text-xs font-mono tabular-nums">
       <div className="flex items-center gap-1.5">
         <StatusDot tone={kTone} pulse={kTone === "ok"} />
-        <span className="text-zinc-400">Kalshi</span>
-        <span className={kTone === "ok" ? "text-zinc-300" : "text-zinc-500"}>
+        <span className="text-zinc-300">Kalshi</span>
+        <span className={kTone === "ok" ? "text-zinc-100" : "text-zinc-400"}>
           {ago(lastK)}
         </span>
       </div>
       <div className="flex items-center gap-1.5">
         <StatusDot tone={bTone} pulse={bTone === "ok"} />
-        <span className="text-zinc-400">Books</span>
-        <span className={bTone === "ok" ? "text-zinc-300" : "text-zinc-500"}>
+        <span className="text-zinc-300">Books</span>
+        <span className={bTone === "ok" ? "text-zinc-100" : "text-zinc-400"}>
           {ago(lastB)}
         </span>
       </div>

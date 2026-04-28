@@ -68,7 +68,7 @@ export default async function SignalDetailPage({
                       ).toFixed(2),
                 },
               }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-emerald-950 hover:bg-emerald-500"
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-400"
             >
               <Send className="size-3" />
               Log a bet on this
@@ -77,7 +77,7 @@ export default async function SignalDetailPage({
               href={`https://kalshi.com/markets/${s.ticker}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
+              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-100 hover:border-zinc-600 hover:bg-zinc-800"
             >
               Open on Kalshi
               <ExternalLink className="size-3" />

@@ -25,10 +25,10 @@ export default function Nav() {
             key={n.href}
             href={n.href}
             className={cn(
-              "relative px-3 py-1.5 text-sm rounded-md transition-colors",
+              "relative px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
               active
-                ? "text-zinc-100 bg-zinc-800/80"
-                : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/60",
+                ? "text-zinc-50 bg-zinc-800"
+                : "text-zinc-300 hover:text-zinc-50 hover:bg-zinc-900",
             )}
           >
             {n.label}

@@ -48,7 +48,7 @@ function marketChip(s: SignalRow) {
 }
 
 function edgeBadge(edge: number | null) {
-  if (edge == null) return <span className="text-zinc-600">—</span>;
+  if (edge == null) return <span className="text-zinc-500">—</span>;
   if (edge >= 0.05)
     return (
       <Badge variant="warning" mono>
@@ -57,32 +57,32 @@ function edgeBadge(edge: number | null) {
     );
   if (edge >= 0.02) return <Badge variant="positive" mono>{pct(edge)}</Badge>;
   if (edge >= 0.005) return <Badge variant="info" mono>{pct(edge)}</Badge>;
-  return <span className="font-mono tabular-nums text-zinc-500">{pct(edge)}</span>;
+  return <span className="font-mono tabular-nums text-zinc-300">{pct(edge)}</span>;
 }
 
 function clvBadge(clv: number | null) {
-  if (clv == null) return <span className="text-zinc-600">pending</span>;
+  if (clv == null) return <span className="text-zinc-500">pending</span>;
   if (clv > 0.005)
     return (
-      <span className="font-mono tabular-nums text-emerald-400 inline-flex items-center gap-0.5">
+      <span className="font-mono tabular-nums text-emerald-300 inline-flex items-center gap-0.5">
         <ArrowUp className="size-3" />
         {pct(clv)}
       </span>
     );
   if (clv < -0.005)
     return (
-      <span className="font-mono tabular-nums text-rose-400 inline-flex items-center gap-0.5">
+      <span className="font-mono tabular-nums text-rose-300 inline-flex items-center gap-0.5">
         <ArrowDown className="size-3" />
         {pct(clv)}
       </span>
     );
-  return <span className="font-mono tabular-nums text-zinc-400">{pct(clv)}</span>;
+  return <span className="font-mono tabular-nums text-zinc-300">{pct(clv)}</span>;
 }
 
 function stalenessCell(sec: number | null, staleAt: number) {
-  if (sec == null) return <span className="text-zinc-600">—</span>;
+  if (sec == null) return <span className="text-zinc-500">—</span>;
   const tone =
-    sec > staleAt ? "text-rose-400" : sec > staleAt / 2 ? "text-amber-400" : "text-zinc-400";
+    sec > staleAt ? "text-rose-300" : sec > staleAt / 2 ? "text-amber-300" : "text-zinc-300";
   return <span className={`font-mono tabular-nums ${tone}`}>{sec}s</span>;
 }
 
@@ -180,8 +180,8 @@ export default async function SignalsPage({
     <>
       <PageHeader
         eyebrow="Live · auto-refreshing"
-        title="Signals"
-        description="Real-time +EV opportunities across NHL game-line markets. Edge ≥ 0.5% after fees, sorted by detection time."
+        title="Kalshi +EV signals"
+        description="Each row is a Kalshi NHL contract priced below fair value. 'Fair' is the multi-book sportsbook consensus (used as the oracle, not as a bet target — you can only trade on Kalshi). Click a row to see the per-book breakdown and buy."
         actions={
           <div className="flex items-center gap-3 text-xs text-zinc-400">
             <AutoRefresh intervalMs={30_000} />
@@ -334,6 +334,7 @@ export default async function SignalsPage({
                 />
               </Th>
               <Th>Status</Th>
+              <Th>Action</Th>
             </Tr>
           </THead>
           <TBody>
@@ -382,8 +383,20 @@ export default async function SignalsPage({
                     <Badge variant="info" mono>CLOSED</Badge>
                   )}
                   {s.resolved_outcome == null && s.closing_kalshi_yes_price == null && (
-                    <span className="text-xs text-zinc-600">open</span>
+                    <Badge variant="outline" mono>OPEN</Badge>
                   )}
+                </Td>
+                <Td>
+                  <a
+                    href={`https://kalshi.com/markets/${s.ticker}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md bg-sky-500/15 px-2 py-1 text-xs font-semibold text-sky-200 ring-1 ring-sky-500/40 transition-colors hover:bg-sky-500/25 hover:text-sky-100"
+                    title={`Buy ${s.side.toUpperCase()} on Kalshi at ${(s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask).toFixed(3)}`}
+                  >
+                    Buy {s.side.toUpperCase()}
+                    <ExternalLink className="size-3" />
+                  </a>
                 </Td>
               </Tr>
             ))}
