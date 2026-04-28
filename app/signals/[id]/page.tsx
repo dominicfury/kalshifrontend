@@ -83,7 +83,7 @@ export default async function SignalDetailPage({
                   contributing_books: detail.contributing_books.slice(0, 12),
                 },
                 seedPrompt:
-                  "Explain this signal in plain English, why it's flagged as +EV, how to place the bet on Kalshi, and the biggest risk to be aware of.",
+                  "Walk me through this signal column-by-column. Explain what each number on the row means AND the specific value here, why this is flagged as +EV, exactly how to place the bet on Kalshi, and the biggest risks. Reference the per-book consensus contributions to identify the sharpest sources.",
               }}
             />
             <a
