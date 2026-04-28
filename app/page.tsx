@@ -48,7 +48,7 @@ function marketChip(s: SignalRow) {
 }
 
 function edgeBadge(edge: number | null) {
-  if (edge == null) return <span className="text-zinc-500">—</span>;
+  if (edge == null) return <span className="text-zinc-400">—</span>;
   if (edge >= 0.05)
     return (
       <Badge variant="warning" mono>
@@ -57,32 +57,32 @@ function edgeBadge(edge: number | null) {
     );
   if (edge >= 0.02) return <Badge variant="positive" mono>{pct(edge)}</Badge>;
   if (edge >= 0.005) return <Badge variant="info" mono>{pct(edge)}</Badge>;
-  return <span className="font-mono tabular-nums text-zinc-300">{pct(edge)}</span>;
+  return <span className="font-mono tabular-nums text-zinc-200">{pct(edge)}</span>;
 }
 
 function clvBadge(clv: number | null) {
-  if (clv == null) return <span className="text-zinc-500">pending</span>;
+  if (clv == null) return <span className="text-zinc-400">pending</span>;
   if (clv > 0.005)
     return (
-      <span className="font-mono tabular-nums text-emerald-300 inline-flex items-center gap-0.5">
+      <span className="font-mono tabular-nums font-semibold text-emerald-200 inline-flex items-center gap-0.5">
         <ArrowUp className="size-3" />
         {pct(clv)}
       </span>
     );
   if (clv < -0.005)
     return (
-      <span className="font-mono tabular-nums text-rose-300 inline-flex items-center gap-0.5">
+      <span className="font-mono tabular-nums font-semibold text-rose-200 inline-flex items-center gap-0.5">
         <ArrowDown className="size-3" />
         {pct(clv)}
       </span>
     );
-  return <span className="font-mono tabular-nums text-zinc-300">{pct(clv)}</span>;
+  return <span className="font-mono tabular-nums text-zinc-200">{pct(clv)}</span>;
 }
 
 function stalenessCell(sec: number | null, staleAt: number) {
-  if (sec == null) return <span className="text-zinc-500">—</span>;
+  if (sec == null) return <span className="text-zinc-400">—</span>;
   const tone =
-    sec > staleAt ? "text-rose-300" : sec > staleAt / 2 ? "text-amber-300" : "text-zinc-300";
+    sec > staleAt ? "text-rose-200" : sec > staleAt / 2 ? "text-amber-200" : "text-zinc-200";
   return <span className={`font-mono tabular-nums ${tone}`}>{sec}s</span>;
 }
 
@@ -99,6 +99,7 @@ function parseFilters(sp: Record<string, string | string[] | undefined>): Signal
     minEdge: Number.isFinite(minEdge) ? minEdge : undefined,
     alertedOnly: get("alerted") === "1",
     unresolvedOnly: get("unresolved") === "1",
+    showAll: get("all") === "1",
   };
 }
 
@@ -391,7 +392,7 @@ export default async function SignalsPage({
                     href={`https://kalshi.com/markets/${s.ticker}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-md bg-sky-500/15 px-2 py-1 text-xs font-semibold text-sky-200 ring-1 ring-sky-500/40 transition-colors hover:bg-sky-500/25 hover:text-sky-100"
+                    className="inline-flex items-center gap-1 rounded-md bg-sky-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-sky-400"
                     title={`Buy ${s.side.toUpperCase()} on Kalshi at ${(s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask).toFixed(3)}`}
                   >
                     Buy {s.side.toUpperCase()}

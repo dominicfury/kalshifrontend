@@ -43,6 +43,7 @@ function buildHref(current: SignalFilters, patch: Partial<SignalFilters>): strin
   }
   if (merged.alertedOnly) params.set("alerted", "1");
   if (merged.unresolvedOnly) params.set("unresolved", "1");
+  if (merged.showAll) params.set("all", "1");
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }
@@ -74,6 +75,12 @@ export function SignalFilterBar({
         filter
       </span>
       <Chip
+        label={filters.showAll ? "All detections" : "Latest only"}
+        active={!filters.showAll}
+        href={buildHref(filters, { showAll: !filters.showAll })}
+      />
+      <span className="ml-2 text-zinc-500">·</span>
+      <Chip
         label="Today"
         active={!!filters.todayOnly}
         href={buildHref(filters, { todayOnly: !filters.todayOnly })}
@@ -88,7 +95,7 @@ export function SignalFilterBar({
         active={!!filters.alertedOnly}
         href={buildHref(filters, { alertedOnly: !filters.alertedOnly })}
       />
-      <span className="ml-2 text-zinc-600">·</span>
+      <span className="ml-2 text-zinc-500">·</span>
       {minEdgePresets.map((p) => (
         <Chip
           key={p.value}

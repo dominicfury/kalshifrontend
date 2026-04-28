@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink, Send } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -52,37 +52,15 @@ export default async function SignalDetailPage({
         }
         description={s.raw_title}
         actions={
-          <div className="flex items-center gap-2">
-            <Link
-              href={{
-                pathname: "/bets",
-                query: {
-                  signal_id: String(s.id),
-                  ticker: s.ticker,
-                  side: s.side,
-                  fill_price: s.expected_fill_price
-                    ? s.expected_fill_price.toFixed(2)
-                    : (s.side === "yes"
-                        ? s.kalshi_yes_ask
-                        : s.kalshi_no_ask
-                      ).toFixed(2),
-                },
-              }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-400"
-            >
-              <Send className="size-3" />
-              Log a bet on this
-            </Link>
-            <a
-              href={`https://kalshi.com/markets/${s.ticker}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-100 hover:border-zinc-600 hover:bg-zinc-800"
-            >
-              Open on Kalshi
-              <ExternalLink className="size-3" />
-            </a>
-          </div>
+          <a
+            href={`https://kalshi.com/markets/${s.ticker}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md bg-sky-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-sky-400"
+          >
+            Buy {s.side.toUpperCase()} on Kalshi
+            <ExternalLink className="size-3.5" />
+          </a>
         }
       />
 

@@ -35,6 +35,7 @@ export interface SignalFilters {
   minEdge?: number;          // edge_pct_after_fees >= minEdge
   alertedOnly?: boolean;     // alert_sent = 1
   unresolvedOnly?: boolean;  // resolved_outcome IS NULL
+  showAll?: boolean;         // false (default) = latest signal per market+side; true = full history
 }
 
 
@@ -91,24 +92,57 @@ export async function fetchRecentSignals(
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const sortColumn = SORT_SQL[sort.key];
   const sortDir = sort.dir.toUpperCase() === "ASC" ? "ASC" : "DESC";
-  args.push(limit);
 
+  // Default: collapse to one row per (market_id, side) — the most recent
+  // detection — so the ledger reads as "current open opportunities" instead
+  // of an audit log. showAll=true returns every detection (useful for
+  // analyzing edge persistence on a single market).
+  const baseSql = filters.showAll
+    ? `
+        SELECT s.id, s.detected_at,
+               s.kalshi_yes_ask, s.kalshi_no_ask, s.fair_yes_prob,
+               s.side, s.edge_pct_after_fees, s.edge_pct_after_fees_at_size,
+               s.expected_fill_price, s.yes_book_depth,
+               s.kalshi_staleness_sec, s.book_staleness_sec,
+               s.match_confidence, s.alert_sent, s.n_books_used,
+               s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
+               s.hypothetical_pnl,
+               km.ticker, km.market_type, km.period, km.line, km.raw_title,
+               e.home_team, e.away_team, e.start_time
+        FROM signals s
+        JOIN kalshi_markets km ON s.kalshi_market_id = km.id
+        JOIN events e ON km.event_id = e.id
+        ${whereSql}
+      `
+    : `
+        WITH ranked AS (
+          SELECT s.*,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY s.kalshi_market_id, s.side
+                   ORDER BY s.detected_at DESC
+                 ) AS rn
+          FROM signals s
+          ${whereSql.replace(/s\./g, "s.")}
+        )
+        SELECT s.id, s.detected_at,
+               s.kalshi_yes_ask, s.kalshi_no_ask, s.fair_yes_prob,
+               s.side, s.edge_pct_after_fees, s.edge_pct_after_fees_at_size,
+               s.expected_fill_price, s.yes_book_depth,
+               s.kalshi_staleness_sec, s.book_staleness_sec,
+               s.match_confidence, s.alert_sent, s.n_books_used,
+               s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
+               s.hypothetical_pnl,
+               km.ticker, km.market_type, km.period, km.line, km.raw_title,
+               e.home_team, e.away_team, e.start_time
+        FROM ranked s
+        JOIN kalshi_markets km ON s.kalshi_market_id = km.id
+        JOIN events e ON km.event_id = e.id
+        WHERE s.rn = 1
+      `;
+
+  args.push(limit);
   const result = await db.execute({
-    sql: `
-      SELECT s.id, s.detected_at,
-             s.kalshi_yes_ask, s.kalshi_no_ask, s.fair_yes_prob,
-             s.side, s.edge_pct_after_fees, s.edge_pct_after_fees_at_size,
-             s.expected_fill_price, s.yes_book_depth,
-             s.kalshi_staleness_sec, s.book_staleness_sec,
-             s.match_confidence, s.alert_sent, s.n_books_used,
-             s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
-             s.hypothetical_pnl,
-             km.ticker, km.market_type, km.period, km.line, km.raw_title,
-             e.home_team, e.away_team, e.start_time
-      FROM signals s
-      JOIN kalshi_markets km ON s.kalshi_market_id = km.id
-      JOIN events e ON km.event_id = e.id
-      ${whereSql}
+    sql: `${baseSql}
       ORDER BY ${sortColumn} ${sortDir} NULLS LAST, s.id DESC
       LIMIT ?
     `,

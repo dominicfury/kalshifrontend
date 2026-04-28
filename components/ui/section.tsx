@@ -23,7 +23,7 @@ export function Section({
         <div className="flex items-end justify-between gap-4">
           <div>
             {eyebrow && (
-              <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">
+              <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-zinc-300">
                 {eyebrow}
               </div>
             )}
@@ -33,7 +33,7 @@ export function Section({
               </h2>
             )}
             {description && (
-              <p className="mt-1 max-w-2xl text-sm text-zinc-300">{description}</p>
+              <p className="mt-1 max-w-2xl text-sm text-zinc-200">{description}</p>
             )}
           </div>
           {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -57,18 +57,18 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-800/80 pb-5">
+    <header className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-700 pb-5">
       <div>
         {eyebrow && (
-          <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300">
+          <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-sky-200">
             {eyebrow}
           </div>
         )}
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-50">
           {title}
         </h1>
         {description && (
-          <p className="mt-1 max-w-2xl text-sm text-zinc-300">{description}</p>
+          <p className="mt-2 max-w-3xl text-sm text-zinc-200 leading-relaxed">{description}</p>
         )}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}

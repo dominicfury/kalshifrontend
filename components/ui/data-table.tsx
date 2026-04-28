@@ -8,7 +8,7 @@ export function DataTable({
   return (
     <div
       className={cn(
-        "overflow-x-auto rounded-xl border border-zinc-800/80 bg-zinc-900/20",
+        "overflow-x-auto rounded-xl border border-zinc-700 bg-zinc-900/40",
         className,
       )}
       {...rest}
@@ -20,14 +20,14 @@ export function DataTable({
 
 export function THead({ children }: { children: React.ReactNode }) {
   return (
-    <thead className="bg-zinc-900/60 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
+    <thead className="bg-zinc-900 text-[11px] uppercase tracking-[0.12em] font-semibold text-zinc-200">
       {children}
     </thead>
   );
 }
 
 export function TBody({ children }: { children: React.ReactNode }) {
-  return <tbody className="divide-y divide-zinc-800/80">{children}</tbody>;
+  return <tbody className="divide-y divide-zinc-800">{children}</tbody>;
 }
 
 export function Th({
@@ -89,11 +89,11 @@ export function Td({
   return (
     <td
       className={cn(
-        "px-3 py-2 whitespace-nowrap text-zinc-200",
+        "px-3 py-2.5 whitespace-nowrap text-zinc-100",
         align === "right" && "text-right",
         align === "center" && "text-center",
         mono && "font-mono tabular-nums",
-        muted && "text-zinc-400",
+        muted && "text-zinc-300",
         className,
       )}
     >

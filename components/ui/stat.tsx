@@ -28,13 +28,13 @@ export function Stat({
   return (
     <div
       className={cn(
-        "rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 transition-colors hover:border-zinc-700/80",
+        "rounded-xl border border-zinc-700 bg-zinc-900/60 p-4 transition-colors hover:border-zinc-600 hover:bg-zinc-900",
         className,
       )}
     >
-      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] text-zinc-400">
+      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.12em] font-semibold text-zinc-300">
         <span>{label}</span>
-        {icon && <span className="text-zinc-500">{icon}</span>}
+        {icon && <span className="text-zinc-400">{icon}</span>}
       </div>
       <div
         className={cn(
@@ -44,7 +44,7 @@ export function Stat({
       >
         {value}
       </div>
-      {hint && <div className="mt-1 text-xs text-zinc-400">{hint}</div>}
+      {hint && <div className="mt-1 text-xs text-zinc-300">{hint}</div>}
     </div>
   );
 }
