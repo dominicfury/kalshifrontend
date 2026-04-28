@@ -1,7 +1,39 @@
-import { fetchHealth } from "@/lib/queries";
+import { AlertTriangle, Database, Mail, Network } from "lucide-react";
+
+import { Card, CardBody } from "@/components/ui/card";
+import { PageHeader, Section } from "@/components/ui/section";
+import { Stat } from "@/components/ui/stat";
+import { StatusDot } from "@/components/ui/status-dot";
 import { ago } from "@/lib/format";
+import { fetchHealth } from "@/lib/queries";
 
 export const revalidate = 30;
+
+
+function freshnessTone(lastIso: string | null, staleAfterSec: number) {
+  if (!lastIso) return "error" as const;
+  const t = Date.parse(
+    lastIso.endsWith("Z") || lastIso.includes("+") ? lastIso : lastIso + "Z",
+  );
+  if (Number.isNaN(t)) return "error" as const;
+  const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (sec > staleAfterSec * 2) return "error" as const;
+  if (sec > staleAfterSec) return "warn" as const;
+  return "ok" as const;
+}
+
+const TONE_LABEL = {
+  ok: "OK",
+  warn: "STALE",
+  error: "DOWN",
+} as const;
+
+const TONE_TEXT_CLASS = {
+  ok: "text-emerald-400",
+  warn: "text-amber-400",
+  error: "text-rose-400",
+} as const;
+
 
 export default async function HealthPage() {
   let h = null;
@@ -13,130 +45,133 @@ export default async function HealthPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">System health</h1>
-        <p className="text-sm text-zinc-400 mt-1">
-          Last poll times, signal counts, and matcher coverage. Refreshes every 30s.
-        </p>
-      </div>
+    <>
+      <PageHeader
+        eyebrow="updated every 30s"
+        title="System health"
+        description="Poller freshness, signal counts, and matcher coverage at a glance."
+      />
 
       {error && (
-        <div className="rounded border border-rose-700 bg-rose-950/40 p-3 text-sm text-rose-200">
+        <div className="rounded-xl border border-rose-900/80 bg-rose-950/40 p-4 text-sm text-rose-200">
           {error}
         </div>
       )}
 
       {h && (
         <>
-          <section>
-            <h2 className="text-sm uppercase tracking-wide text-zinc-400 mb-3">
-              Pollers
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
+          <Section
+            eyebrow="upstreams"
+            title="Pollers"
+            description="Polls write to kalshi_quotes / book_quotes on every tick. Stale = upstream not updating, downstream signals can't be trusted."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
               <PollerCard
                 name="Kalshi"
+                icon={<Network className="size-4" />}
                 lastIso={h.last_kalshi_poll}
                 staleAfterSec={120}
               />
               <PollerCard
-                name="Sportsbooks"
+                name="Sportsbooks (Odds API)"
+                icon={<Database className="size-4" />}
                 lastIso={h.last_book_poll}
                 staleAfterSec={300}
               />
             </div>
-          </section>
+          </Section>
 
-          <section>
-            <h2 className="text-sm uppercase tracking-wide text-zinc-400 mb-3">
-              Signals
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-              <Stat label="Total" value={h.signals_total.toString()} />
-              <Stat label="Last 24h" value={h.signals_last_24h.toString()} />
-              <Stat label="With CLV" value={h.signals_with_clv.toString()} />
-              <Stat label="Resolved" value={h.signals_resolved.toString()} />
-              <Stat label="Alerted" value={h.signals_alerted.toString()} />
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-sm uppercase tracking-wide text-zinc-400 mb-3">
-              Coverage
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Section eyebrow="output" title="Signals">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <Stat label="Total" value={h.signals_total} />
+              <Stat label="Last 24h" value={h.signals_last_24h} tone="muted" />
+              <Stat label="With CLV" value={h.signals_with_clv} tone="muted" />
+              <Stat label="Resolved" value={h.signals_resolved} tone="muted" />
               <Stat
-                label="Active markets"
-                value={h.active_kalshi_markets.toString()}
+                label="Alerted"
+                value={h.signals_alerted}
+                tone={h.signals_alerted === 0 ? "muted" : "default"}
+                icon={<Mail className="size-3" />}
               />
-              <Stat label="Events (last 24h)" value={h.events_active.toString()} />
+            </div>
+          </Section>
+
+          <Section
+            eyebrow="matcher"
+            title="Coverage"
+            description="Unmatched markets indicate normalizer bugs. Anomalies are signals that fired but tripped a sanity-check rule."
+          >
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Stat label="Active markets" value={h.active_kalshi_markets} />
+              <Stat label="Events (24h)" value={h.events_active} tone="muted" />
               <Stat
                 label="Unmatched"
-                value={h.unmatched_kalshi_count.toString()}
-                colorClass={h.unmatched_kalshi_count > 5 ? "text-amber-400" : "text-emerald-400"}
+                value={h.unmatched_kalshi_count}
+                tone={
+                  h.unmatched_kalshi_count > 5
+                    ? "warning"
+                    : h.unmatched_kalshi_count === 0
+                      ? "positive"
+                      : "muted"
+                }
+                icon={
+                  h.unmatched_kalshi_count > 5 ? (
+                    <AlertTriangle className="size-3" />
+                  ) : undefined
+                }
               />
               <Stat
                 label="Anomalies"
-                value={h.signal_anomalies_count.toString()}
-                colorClass={h.signal_anomalies_count > 0 ? "text-amber-400" : "text-emerald-400"}
+                value={h.signal_anomalies_count}
+                tone={
+                  h.signal_anomalies_count > 0 ? "warning" : "positive"
+                }
               />
             </div>
-          </section>
+          </Section>
         </>
       )}
-    </div>
+    </>
   );
 }
 
 
 function PollerCard({
   name,
+  icon,
   lastIso,
   staleAfterSec,
 }: {
   name: string;
+  icon: React.ReactNode;
   lastIso: string | null;
   staleAfterSec: number;
 }) {
-  const t = lastIso
-    ? Date.parse(lastIso.endsWith("Z") || lastIso.includes("+") ? lastIso : lastIso + "Z")
-    : null;
-  const sec = t == null ? Infinity : Math.max(0, Math.round((Date.now() - t) / 1000));
-  const isStale = sec > staleAfterSec;
-
+  const t = freshnessTone(lastIso, staleAfterSec);
   return (
-    <div
-      className={`rounded border p-4 ${
-        isStale ? "border-rose-700 bg-rose-950/40" : "border-emerald-800 bg-emerald-950/20"
-      }`}
-    >
-      <div className="text-xs uppercase text-zinc-400">{name}</div>
-      <div className="text-2xl font-semibold tabular-nums mt-1">
-        {lastIso ? ago(lastIso) : "never"}
-      </div>
-      <div className={`text-xs mt-1 ${isStale ? "text-rose-300" : "text-emerald-300"}`}>
-        {isStale ? "STALE" : "OK"} · threshold {staleAfterSec}s
-      </div>
-    </div>
-  );
-}
-
-
-function Stat({
-  label,
-  value,
-  colorClass,
-}: {
-  label: string;
-  value: string;
-  colorClass?: string;
-}) {
-  return (
-    <div className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
-      <div className="text-xs uppercase text-zinc-500">{label}</div>
-      <div className={`text-2xl font-semibold tabular-nums mt-1 ${colorClass ?? ""}`}>
-        {value}
-      </div>
-    </div>
+    <Card>
+      <CardBody>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-zinc-300">
+            <span className="text-zinc-500">{icon}</span>
+            {name}
+          </div>
+          <div className="flex items-center gap-2">
+            <StatusDot tone={t} pulse={t === "ok"} />
+            <span
+              className={`text-[10px] uppercase tracking-[0.16em] ${TONE_TEXT_CLASS[t]}`}
+            >
+              {TONE_LABEL[t]}
+            </span>
+          </div>
+        </div>
+        <div className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">
+          {lastIso ? ago(lastIso) : "never"}
+        </div>
+        <div className="mt-1 text-xs text-zinc-500">
+          stale threshold {staleAfterSec}s · last successful poll
+        </div>
+      </CardBody>
+    </Card>
   );
 }

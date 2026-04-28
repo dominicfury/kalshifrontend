@@ -1,19 +1,41 @@
+import { Info, TrendingUp } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import {
+  DataTable,
+  TBody,
+  Td,
+  THead,
+  Th,
+  Tr,
+} from "@/components/ui/data-table";
+import { PageHeader, Section } from "@/components/ui/section";
+import { Stat } from "@/components/ui/stat";
+import { clvColor, pct } from "@/lib/format";
 import {
   fetchClvByCategory,
   fetchClvByEdgeBucket,
   fetchClvOverall,
 } from "@/lib/queries";
-import { clvColor, pct } from "@/lib/format";
 
 export const revalidate = 60;
 
+
 const INTERPRETATION = [
-  { range: "> +1%", n: ">100", note: "Real edge — bet confidently" },
-  { range: "+0.3% to +1%", n: ">100", note: "Marginal edge — small or paper trade" },
-  { range: "-0.3% to +0.3%", n: ">100", note: "No edge — stop alerting" },
-  { range: "< -0.3%", n: ">100", note: "Negative edge — model wrong here" },
-  { range: "any", n: "<50", note: "Insufficient data" },
+  { range: "> +1%", n: ">100", note: "Real edge — bet confidently", tone: "positive" as const },
+  { range: "+0.3% to +1%", n: ">100", note: "Marginal edge — small or paper trade", tone: "info" as const },
+  { range: "-0.3% to +0.3%", n: ">100", note: "No edge — stop alerting", tone: "muted" as const },
+  { range: "< -0.3%", n: ">100", note: "Negative edge — model wrong here", tone: "negative" as const },
+  { range: "any", n: "<50", note: "Insufficient data", tone: "muted" as const },
 ];
+
+
+function clvTone(clv: number | null): "positive" | "negative" | "default" | "muted" {
+  if (clv == null) return "muted";
+  if (clv > 0.005) return "positive";
+  if (clv < -0.005) return "negative";
+  return "default";
+}
 
 
 export default async function ClvPage() {
@@ -24,181 +46,160 @@ export default async function ClvPage() {
   ]);
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold">CLV analysis</h1>
-        <p className="text-sm text-zinc-400 mt-1">
-          CLV converges to truth way faster than P&amp;L. If your average CLV is
-          positive across 100+ resolved signals, the model has edge.
-        </p>
-      </div>
+    <>
+      <PageHeader
+        eyebrow="30-day rolling window"
+        title="CLV analysis"
+        description="CLV converges to truth way faster than P&L. Average CLV positive across 100+ resolved signals = the model has edge."
+      />
 
-      <section>
-        <h2 className="text-sm uppercase tracking-wide text-zinc-400 mb-3">
-          Last 30 days · all signals
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Stat label="Signals" value={overall.n.toString()} />
-          <Stat
-            label="Resolved"
-            value={`${overall.n_resolved} / ${overall.n}`}
-          />
-          <Stat
-            label="Avg CLV"
-            value={pct(overall.avg_clv)}
-            colorClass={clvColor(overall.avg_clv)}
-          />
-          <Stat
-            label="% positive"
-            value={overall.pct_positive == null ? "—" : `${(overall.pct_positive * 100).toFixed(0)}%`}
-          />
-        </div>
-        <p className="mt-2 text-xs text-zinc-500">
-          Avg detected edge across these signals: {pct(overall.avg_edge)}
-        </p>
-      </section>
-
-      <section>
-        <h2 className="text-sm uppercase tracking-wide text-zinc-400 mb-3">
-          CLV by edge bucket
-        </h2>
-        <p className="text-xs text-zinc-500 mb-3">
-          If the &quot;5%+&quot; bucket has worse CLV than &quot;1-2%&quot;,
-          your big edges are mostly errors. Tighten validation gates.
-        </p>
-        <BucketTable
-          rows={byBucket.map((b) => ({
-            label: b.bucket,
-            n: b.n,
-            avgClv: b.avg_clv,
-            avgEdge: b.avg_edge,
-          }))}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Signals" value={overall.n.toString()} icon={<TrendingUp className="size-3" />} />
+        <Stat
+          label="Resolved"
+          value={`${overall.n_resolved} / ${overall.n}`}
+          tone="muted"
         />
-      </section>
-
-      <section>
-        <h2 className="text-sm uppercase tracking-wide text-zinc-400 mb-3">
-          CLV by market_type · period
-        </h2>
-        <table className="min-w-full text-sm border border-zinc-800 rounded">
-          <thead className="bg-zinc-900 text-xs uppercase text-zinc-400">
-            <tr>
-              <th className="px-3 py-2 text-left">market_type</th>
-              <th className="px-3 py-2 text-left">period</th>
-              <th className="px-3 py-2 text-right">n</th>
-              <th className="px-3 py-2 text-right">avg CLV</th>
-              <th className="px-3 py-2 text-right">% positive</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {byCategory.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-zinc-500">
-                  no signals yet
-                </td>
-              </tr>
-            )}
-            {byCategory.map((c, i) => (
-              <tr key={i}>
-                <td className="px-3 py-1.5">{c.market_type}</td>
-                <td className="px-3 py-1.5 text-zinc-400">{c.period}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{c.n}</td>
-                <td className={`px-3 py-1.5 text-right tabular-nums ${clvColor(c.avg_clv)}`}>
-                  {pct(c.avg_clv)}
-                </td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-zinc-400">
-                  {c.pct_positive == null ? "—" : `${(c.pct_positive * 100).toFixed(0)}%`}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section>
-        <h2 className="text-sm uppercase tracking-wide text-zinc-400 mb-3">
-          Interpretation guide
-        </h2>
-        <table className="min-w-full text-sm border border-zinc-800 rounded">
-          <thead className="bg-zinc-900 text-xs uppercase text-zinc-400">
-            <tr>
-              <th className="px-3 py-2 text-left">30d avg CLV</th>
-              <th className="px-3 py-2 text-left">n</th>
-              <th className="px-3 py-2 text-left">interpretation</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800">
-            {INTERPRETATION.map((i) => (
-              <tr key={i.range}>
-                <td className="px-3 py-1.5 font-mono">{i.range}</td>
-                <td className="px-3 py-1.5 text-zinc-400">{i.n}</td>
-                <td className="px-3 py-1.5">{i.note}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-    </div>
-  );
-}
-
-
-function Stat({
-  label,
-  value,
-  colorClass,
-}: {
-  label: string;
-  value: string;
-  colorClass?: string;
-}) {
-  return (
-    <div className="rounded border border-zinc-800 bg-zinc-900/40 p-3">
-      <div className="text-xs uppercase text-zinc-500">{label}</div>
-      <div className={`text-2xl font-semibold tabular-nums mt-1 ${colorClass ?? ""}`}>
-        {value}
+        <Stat
+          label="Avg CLV"
+          value={pct(overall.avg_clv)}
+          tone={clvTone(overall.avg_clv)}
+          hint="weight all signals equally"
+        />
+        <Stat
+          label="% Positive"
+          value={
+            overall.pct_positive == null
+              ? "—"
+              : `${(overall.pct_positive * 100).toFixed(0)}%`
+          }
+          tone="muted"
+          hint={overall.avg_edge != null ? `avg edge ${pct(overall.avg_edge)}` : undefined}
+        />
       </div>
-    </div>
-  );
-}
 
+      <Section
+        eyebrow="diagnostic"
+        title="CLV by edge bucket"
+        description="If the 5%+ bucket has worse CLV than 1-2%, your big edges are mostly errors. Tighten validation gates."
+      >
+        <DataTable>
+          <THead>
+            <Tr>
+              <Th>Edge bucket</Th>
+              <Th align="right">n</Th>
+              <Th align="right">Avg edge</Th>
+              <Th align="right">Avg CLV</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {byBucket.length === 0 ? (
+              <Tr>
+                <Td className="text-center text-zinc-500" align="center">
+                  no signals yet
+                </Td>
+                <Td>{null}</Td>
+                <Td>{null}</Td>
+                <Td>{null}</Td>
+              </Tr>
+            ) : (
+              byBucket.map((b) => (
+                <Tr key={b.bucket}>
+                  <Td>
+                    <Badge variant={b.bucket === "5%+" ? "warning" : "muted"} mono>
+                      {b.bucket}
+                    </Badge>
+                  </Td>
+                  <Td align="right" mono muted>{b.n}</Td>
+                  <Td align="right" mono muted>{pct(b.avg_edge)}</Td>
+                  <Td align="right" mono className={clvColor(b.avg_clv)}>
+                    {pct(b.avg_clv)}
+                  </Td>
+                </Tr>
+              ))
+            )}
+          </TBody>
+        </DataTable>
+      </Section>
 
-function BucketTable({
-  rows,
-}: {
-  rows: { label: string; n: number; avgClv: number | null; avgEdge: number | null }[];
-}) {
-  return (
-    <table className="min-w-full text-sm border border-zinc-800 rounded">
-      <thead className="bg-zinc-900 text-xs uppercase text-zinc-400">
-        <tr>
-          <th className="px-3 py-2 text-left">edge bucket</th>
-          <th className="px-3 py-2 text-right">n</th>
-          <th className="px-3 py-2 text-right">avg edge</th>
-          <th className="px-3 py-2 text-right">avg CLV</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-zinc-800">
-        {rows.length === 0 && (
-          <tr>
-            <td colSpan={4} className="px-3 py-6 text-center text-zinc-500">
-              no signals yet
-            </td>
-          </tr>
-        )}
-        {rows.map((r) => (
-          <tr key={r.label}>
-            <td className="px-3 py-1.5 font-mono">{r.label}</td>
-            <td className="px-3 py-1.5 text-right tabular-nums">{r.n}</td>
-            <td className="px-3 py-1.5 text-right tabular-nums text-zinc-400">
-              {pct(r.avgEdge)}
-            </td>
-            <td className={`px-3 py-1.5 text-right tabular-nums ${clvColor(r.avgClv)}`}>
-              {pct(r.avgClv)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+      <Section
+        eyebrow="breakdown"
+        title="CLV by market type · period"
+        description="Look for categories where CLV is consistently positive — those are where the model has an edge worth alerting on."
+      >
+        <DataTable>
+          <THead>
+            <Tr>
+              <Th>Market</Th>
+              <Th>Period</Th>
+              <Th align="right">n</Th>
+              <Th align="right">Avg CLV</Th>
+              <Th align="right">% positive</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {byCategory.length === 0 ? (
+              <Tr>
+                <Td align="center" className="text-zinc-500">no signals yet</Td>
+                <Td>{null}</Td>
+                <Td>{null}</Td>
+                <Td>{null}</Td>
+                <Td>{null}</Td>
+              </Tr>
+            ) : (
+              byCategory.map((c, i) => (
+                <Tr key={i}>
+                  <Td>
+                    <Badge variant="muted" mono>{c.market_type}</Badge>
+                  </Td>
+                  <Td muted>{c.period}</Td>
+                  <Td align="right" mono>{c.n}</Td>
+                  <Td align="right" mono className={clvColor(c.avg_clv)}>
+                    {pct(c.avg_clv)}
+                  </Td>
+                  <Td align="right" mono muted>
+                    {c.pct_positive == null
+                      ? "—"
+                      : `${(c.pct_positive * 100).toFixed(0)}%`}
+                  </Td>
+                </Tr>
+              ))
+            )}
+          </TBody>
+        </DataTable>
+      </Section>
+
+      <Section
+        eyebrow="reference"
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Info className="size-4 text-sky-400/80" /> Interpretation guide
+          </span>
+        }
+      >
+        <DataTable>
+          <THead>
+            <Tr>
+              <Th>30-day avg CLV</Th>
+              <Th>n</Th>
+              <Th>Interpretation</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {INTERPRETATION.map((i) => (
+              <Tr key={i.range}>
+                <Td>
+                  <Badge variant={i.tone} mono>
+                    {i.range}
+                  </Badge>
+                </Td>
+                <Td muted mono>{i.n}</Td>
+                <Td>{i.note}</Td>
+              </Tr>
+            ))}
+          </TBody>
+        </DataTable>
+      </Section>
+    </>
   );
 }
