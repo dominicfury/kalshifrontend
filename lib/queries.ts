@@ -38,9 +38,37 @@ export interface SignalFilters {
 }
 
 
+export type SignalSortKey =
+  | "detected_at"
+  | "edge"
+  | "edge_at_size"
+  | "kalshi_yes_ask"
+  | "fair"
+  | "kalshi_stale"
+  | "book_stale"
+  | "n_books"
+  | "clv";
+
+const SORT_SQL: Record<SignalSortKey, string> = {
+  detected_at: "s.detected_at",
+  edge: "s.edge_pct_after_fees",
+  edge_at_size: "COALESCE(s.edge_pct_after_fees_at_size, s.edge_pct_after_fees)",
+  kalshi_yes_ask: "s.kalshi_yes_ask",
+  fair: "s.fair_yes_prob",
+  kalshi_stale: "s.kalshi_staleness_sec",
+  book_stale: "s.book_staleness_sec",
+  n_books: "s.n_books_used",
+  clv: "s.clv_pct",
+};
+
+
 export async function fetchRecentSignals(
   limit = 100,
   filters: SignalFilters = {},
+  sort: { key: SignalSortKey; dir: "asc" | "desc" } = {
+    key: "detected_at",
+    dir: "desc",
+  },
 ): Promise<SignalRow[]> {
   const db = getDb();
   const where: string[] = [];
@@ -61,6 +89,8 @@ export async function fetchRecentSignals(
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const sortColumn = SORT_SQL[sort.key];
+  const sortDir = sort.dir.toUpperCase() === "ASC" ? "ASC" : "DESC";
   args.push(limit);
 
   const result = await db.execute({
@@ -79,7 +109,7 @@ export async function fetchRecentSignals(
       JOIN kalshi_markets km ON s.kalshi_market_id = km.id
       JOIN events e ON km.event_id = e.id
       ${whereSql}
-      ORDER BY s.detected_at DESC
+      ORDER BY ${sortColumn} ${sortDir} NULLS LAST, s.id DESC
       LIMIT ?
     `,
     args,
@@ -119,6 +149,174 @@ export async function fetchClvOverall(daysBack = 30): Promise<ClvOverall> {
     avg_edge: row.avg_edge == null ? null : Number(row.avg_edge),
   };
 }
+
+export interface SignalDetail {
+  signal: SignalRow;
+  yes_book: { price: number; size: number }[];
+  no_book: { price: number; size: number }[];
+  contributing_books: {
+    book: string;
+    this_side_odds: number;
+    other_side_odds: number;
+    fair_prob: number;
+    polled_at: string;
+  }[];
+  history: {
+    id: number;
+    detected_at: string;
+    edge_pct_after_fees: number;
+    side: "yes" | "no";
+    kalshi_yes_ask: number;
+    fair_yes_prob: number;
+  }[];
+}
+
+
+export async function fetchSignalDetail(id: number): Promise<SignalDetail | null> {
+  const db = getDb();
+
+  const sigRes = await db.execute({
+    sql: `
+      SELECT s.id, s.detected_at,
+             s.kalshi_yes_ask, s.kalshi_no_ask, s.fair_yes_prob,
+             s.side, s.edge_pct_after_fees, s.edge_pct_after_fees_at_size,
+             s.expected_fill_price, s.yes_book_depth,
+             s.kalshi_staleness_sec, s.book_staleness_sec,
+             s.match_confidence, s.alert_sent, s.n_books_used,
+             s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
+             s.hypothetical_pnl,
+             km.id AS kalshi_market_id,
+             km.ticker, km.market_type, km.period, km.line, km.raw_title,
+             e.id AS event_id, e.home_team, e.away_team, e.start_time
+      FROM signals s
+      JOIN kalshi_markets km ON s.kalshi_market_id = km.id
+      JOIN events e ON km.event_id = e.id
+      WHERE s.id = ?
+    `,
+    args: [id],
+  });
+  if (sigRes.rows.length === 0) return null;
+  const signalRow = sigRes.rows[0] as unknown as SignalRow & {
+    kalshi_market_id: number;
+    event_id: number;
+  };
+
+  // Latest Kalshi quote → orderbook JSON
+  const quoteRes = await db.execute({
+    sql: `
+      SELECT yes_book_json, no_book_json
+      FROM kalshi_quotes
+      WHERE market_id = ?
+      ORDER BY polled_at DESC
+      LIMIT 1
+    `,
+    args: [signalRow.kalshi_market_id],
+  });
+  const quoteRow = quoteRes.rows[0] as unknown as
+    | { yes_book_json: string | null; no_book_json: string | null }
+    | undefined;
+
+  function parseBook(json: string | null | undefined): { price: number; size: number }[] {
+    if (!json) return [];
+    try {
+      const v = JSON.parse(json);
+      return Array.isArray(v)
+        ? v.filter((x) => x && typeof x === "object").map((x: { price: unknown; size: unknown }) => ({
+            price: Number(x.price),
+            size: Number(x.size),
+          }))
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Latest book quotes per book for both sides of the devig pair.
+  const PAIRS: Record<string, [string, string]> = {
+    moneyline: ["home", "away"],
+    puckline: ["home", "away"],
+    total: ["over", "under"],
+    period_total: ["over", "under"],
+    period_moneyline: ["home", "away"],
+  };
+  const pair = PAIRS[signalRow.market_type];
+  const otherSide = pair ? (signalRow.side === pair[0] ? pair[1] : pair[0]) : null;
+  let contributing: SignalDetail["contributing_books"] = [];
+  if (pair && otherSide) {
+    const lineParam = signalRow.line ?? -9999;
+    const booksRes = await db.execute({
+      sql: `
+        WITH latest AS (
+          SELECT bm.id AS book_market_id, bm.book, bm.side, bq.decimal_odds, bq.polled_at,
+                 ROW_NUMBER() OVER (PARTITION BY bm.id ORDER BY bq.polled_at DESC) AS rn
+          FROM book_markets bm
+          JOIN book_quotes bq ON bq.book_market_id = bm.id
+          WHERE bm.event_id = ? AND bm.market_type = ? AND bm.period = ?
+            AND bm.line = ? AND bm.side IN (?, ?)
+        )
+        SELECT book, side, decimal_odds, polled_at FROM latest WHERE rn = 1
+      `,
+      args: [
+        signalRow.event_id,
+        signalRow.market_type,
+        signalRow.period,
+        lineParam,
+        signalRow.side,
+        otherSide,
+      ],
+    });
+    const byBook: Record<string, { this?: number; other?: number; polled?: string }> = {};
+    for (const row of booksRes.rows) {
+      const o = row as unknown as Record<string, unknown>;
+      const book = String(o.book);
+      const side = String(o.side);
+      const odds = Number(o.decimal_odds);
+      const polled = String(o.polled_at);
+      const slot = byBook[book] ?? {};
+      if (side === signalRow.side) slot.this = odds;
+      else if (side === otherSide) slot.other = odds;
+      slot.polled = !slot.polled || polled > slot.polled ? polled : slot.polled;
+      byBook[book] = slot;
+    }
+    contributing = Object.entries(byBook)
+      .filter(([, v]) => v.this != null && v.other != null)
+      .map(([book, v]) => {
+        const t = v.this!;
+        const o = v.other!;
+        const sumImplied = 1 / t + 1 / o;
+        const fair = 1 / t / sumImplied;
+        return {
+          book,
+          this_side_odds: t,
+          other_side_odds: o,
+          fair_prob: fair,
+          polled_at: v.polled || "",
+        };
+      })
+      .sort((a, b) => b.fair_prob - a.fair_prob);
+  }
+
+  // History of signals on this market (last 20).
+  const histRes = await db.execute({
+    sql: `
+      SELECT id, detected_at, edge_pct_after_fees, side, kalshi_yes_ask, fair_yes_prob
+      FROM signals
+      WHERE kalshi_market_id = ?
+      ORDER BY detected_at DESC
+      LIMIT 20
+    `,
+    args: [signalRow.kalshi_market_id],
+  });
+
+  return {
+    signal: signalRow,
+    yes_book: parseBook(quoteRow?.yes_book_json),
+    no_book: parseBook(quoteRow?.no_book_json),
+    contributing_books: contributing,
+    history: histRes.rows as unknown as SignalDetail["history"],
+  };
+}
+
 
 export interface ClvDayPoint {
   day: string;          // YYYY-MM-DD UTC

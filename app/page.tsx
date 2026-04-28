@@ -1,4 +1,5 @@
-import { ArrowDown, ArrowUp, Activity, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, Activity, ExternalLink, Zap } from "lucide-react";
+import Link from "next/link";
 
 import { SignalFilterBar } from "@/components/filters/signal-filters";
 import { Badge } from "@/components/ui/badge";
@@ -12,11 +13,13 @@ import {
 } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/section";
+import { SortHeader } from "@/components/ui/sort-header";
 import { ago, num, pct, teamLabel } from "@/lib/format";
 import {
   fetchRecentSignals,
   type SignalFilters,
   type SignalRow,
+  type SignalSortKey,
 } from "@/lib/queries";
 
 // Filters are URL-driven, so we render on every request rather than ISR.
@@ -99,6 +102,56 @@ function parseFilters(sp: Record<string, string | string[] | undefined>): Signal
 }
 
 
+const VALID_SORT_KEYS: SignalSortKey[] = [
+  "detected_at",
+  "edge",
+  "edge_at_size",
+  "kalshi_yes_ask",
+  "fair",
+  "kalshi_stale",
+  "book_stale",
+  "n_books",
+  "clv",
+];
+
+
+function parseSort(sp: Record<string, string | string[] | undefined>): {
+  key: SignalSortKey;
+  dir: "asc" | "desc";
+} {
+  const get = (k: string) => {
+    const v = sp[k];
+    return Array.isArray(v) ? v[0] : v;
+  };
+  const rawKey = (get("sort") || "detected_at") as SignalSortKey;
+  const key: SignalSortKey = VALID_SORT_KEYS.includes(rawKey) ? rawKey : "detected_at";
+  const dir: "asc" | "desc" = get("dir") === "asc" ? "asc" : "desc";
+  return { key, dir };
+}
+
+
+function buildSortHref(
+  current: { key: SignalSortKey; dir: "asc" | "desc" },
+  filters: SignalFilters,
+  next: { key: SignalSortKey; dir: "asc" | "desc" },
+): string {
+  const params = new URLSearchParams();
+  if (filters.todayOnly) params.set("today", "1");
+  if (filters.minEdge != null && filters.minEdge > 0) {
+    params.set("minEdge", String(filters.minEdge));
+  }
+  if (filters.alertedOnly) params.set("alerted", "1");
+  if (filters.unresolvedOnly) params.set("unresolved", "1");
+  if (next.key !== "detected_at" || next.dir !== "desc") {
+    params.set("sort", next.key);
+    if (next.dir !== "desc") params.set("dir", next.dir);
+  }
+  const qs = params.toString();
+  void current;  // dependency for memo callsites; current.key handled above
+  return qs ? `/?${qs}` : "/";
+}
+
+
 export default async function SignalsPage({
   searchParams,
 }: {
@@ -106,11 +159,14 @@ export default async function SignalsPage({
 }) {
   const sp = await searchParams;
   const filters = parseFilters(sp);
+  const sort = parseSort(sp);
+  const sortHref = (key: SignalSortKey, dir: "asc" | "desc") =>
+    buildSortHref(sort, filters, { key, dir });
 
   let signals: SignalRow[] = [];
   let error: string | null = null;
   try {
-    signals = await fetchRecentSignals(100, filters);
+    signals = await fetchRecentSignals(100, filters, sort);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -183,26 +239,121 @@ export default async function SignalsPage({
         <DataTable>
           <THead>
             <Tr>
-              <Th>When</Th>
+              <Th>
+                <SortHeader
+                  label="When"
+                  sortKey="detected_at"
+                  active={sort.key === "detected_at"}
+                  dir={sort.dir}
+                  href={sortHref}
+                />
+              </Th>
               <Th>Matchup</Th>
               <Th>Market</Th>
-              <Th align="right">Yes ask</Th>
-              <Th align="right">Fair</Th>
-              <Th align="right">Edge</Th>
-              <Th align="right">@ size</Th>
+              <Th align="right">
+                <SortHeader
+                  label="Yes ask"
+                  sortKey="kalshi_yes_ask"
+                  active={sort.key === "kalshi_yes_ask"}
+                  dir={sort.dir}
+                  href={sortHref}
+                  align="right"
+                />
+              </Th>
+              <Th align="right">
+                <SortHeader
+                  label="Fair"
+                  sortKey="fair"
+                  active={sort.key === "fair"}
+                  dir={sort.dir}
+                  href={sortHref}
+                  align="right"
+                />
+              </Th>
+              <Th align="right">
+                <SortHeader
+                  label="Edge"
+                  sortKey="edge"
+                  active={sort.key === "edge"}
+                  dir={sort.dir}
+                  href={sortHref}
+                  align="right"
+                />
+              </Th>
+              <Th align="right">
+                <SortHeader
+                  label="@ size"
+                  sortKey="edge_at_size"
+                  active={sort.key === "edge_at_size"}
+                  dir={sort.dir}
+                  href={sortHref}
+                  align="right"
+                />
+              </Th>
               <Th align="right">Depth</Th>
-              <Th align="right">K stale</Th>
-              <Th align="right">B stale</Th>
-              <Th align="right">Books</Th>
-              <Th align="right">CLV</Th>
+              <Th align="right">
+                <SortHeader
+                  label="K stale"
+                  sortKey="kalshi_stale"
+                  active={sort.key === "kalshi_stale"}
+                  dir={sort.dir}
+                  href={sortHref}
+                  align="right"
+                />
+              </Th>
+              <Th align="right">
+                <SortHeader
+                  label="B stale"
+                  sortKey="book_stale"
+                  active={sort.key === "book_stale"}
+                  dir={sort.dir}
+                  href={sortHref}
+                  align="right"
+                />
+              </Th>
+              <Th align="right">
+                <SortHeader
+                  label="Books"
+                  sortKey="n_books"
+                  active={sort.key === "n_books"}
+                  dir={sort.dir}
+                  href={sortHref}
+                  align="right"
+                />
+              </Th>
+              <Th align="right">
+                <SortHeader
+                  label="CLV"
+                  sortKey="clv"
+                  active={sort.key === "clv"}
+                  dir={sort.dir}
+                  href={sortHref}
+                  align="right"
+                />
+              </Th>
               <Th>Status</Th>
             </Tr>
           </THead>
           <TBody>
             {signals.map((s) => (
               <Tr key={s.id}>
-                <Td muted>{ago(s.detected_at)}</Td>
-                <Td>{matchupLabel(s)}</Td>
+                <Td muted>
+                  <Link
+                    href={`/signals/${s.id}`}
+                    className="inline-flex items-center gap-1 hover:text-zinc-200"
+                  >
+                    {ago(s.detected_at)}
+                    <ExternalLink className="size-3 opacity-40" />
+                  </Link>
+                </Td>
+                <Td>
+                  <Link
+                    href={`/signals/${s.id}`}
+                    className="hover:text-zinc-50"
+                  >
+                    {matchupLabel(s)}
+                  </Link>
+                </Td>
                 <Td>{marketChip(s)}</Td>
                 <Td align="right" mono>{num(s.kalshi_yes_ask, 3)}</Td>
                 <Td align="right" mono>{num(s.fair_yes_prob, 3)}</Td>
