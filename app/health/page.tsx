@@ -1,5 +1,6 @@
 import { AlertTriangle, Database, Mail, Network } from "lucide-react";
 
+import { AutoRefresh } from "@/components/layout/auto-refresh";
 import { Card, CardBody } from "@/components/ui/card";
 import { PageHeader, Section } from "@/components/ui/section";
 import { Stat } from "@/components/ui/stat";
@@ -7,7 +8,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { ago } from "@/lib/format";
 import { fetchHealth } from "@/lib/queries";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 
 function freshnessTone(lastIso: string | null, staleAfterSec: number) {
@@ -50,6 +51,7 @@ export default async function HealthPage() {
         eyebrow="updated every 30s"
         title="System health"
         description="Poller freshness, signal counts, and matcher coverage at a glance."
+        actions={<AutoRefresh intervalMs={30_000} />}
       />
 
       {error && (

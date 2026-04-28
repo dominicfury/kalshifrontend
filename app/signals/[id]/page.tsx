@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink, Send } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -52,15 +52,37 @@ export default async function SignalDetailPage({
         }
         description={s.raw_title}
         actions={
-          <a
-            href={`https://kalshi.com/markets/${s.ticker}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
-          >
-            Open on Kalshi
-            <ExternalLink className="size-3" />
-          </a>
+          <div className="flex items-center gap-2">
+            <Link
+              href={{
+                pathname: "/bets",
+                query: {
+                  signal_id: String(s.id),
+                  ticker: s.ticker,
+                  side: s.side,
+                  fill_price: s.expected_fill_price
+                    ? s.expected_fill_price.toFixed(2)
+                    : (s.side === "yes"
+                        ? s.kalshi_yes_ask
+                        : s.kalshi_no_ask
+                      ).toFixed(2),
+                },
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-emerald-950 hover:bg-emerald-500"
+            >
+              <Send className="size-3" />
+              Log a bet on this
+            </Link>
+            <a
+              href={`https://kalshi.com/markets/${s.ticker}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-700 hover:text-zinc-100"
+            >
+              Open on Kalshi
+              <ExternalLink className="size-3" />
+            </a>
+          </div>
         }
       />
 

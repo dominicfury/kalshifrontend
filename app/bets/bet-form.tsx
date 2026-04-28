@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2, Send } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useActionState } from "react";
 
 import { cn } from "@/lib/cn";
@@ -13,6 +14,11 @@ const initial: BetFormState = { ok: false, message: "" };
 
 export default function BetForm({ signals }: { signals: OpenSignalForBet[] }) {
   const [state, action, pending] = useActionState(logBetAction, initial);
+  const sp = useSearchParams();
+  const prefillSignal = sp.get("signal_id") || "";
+  const prefillTicker = sp.get("ticker") || "";
+  const prefillSide = (sp.get("side") || "yes") as "yes" | "no";
+  const prefillFill = sp.get("fill_price") || "";
 
   return (
     <form
@@ -23,7 +29,8 @@ export default function BetForm({ signals }: { signals: OpenSignalForBet[] }) {
         <select
           name="signal_id"
           className={fieldStyle()}
-          defaultValue=""
+          defaultValue={prefillSignal}
+          key={`signal-${prefillSignal}`}
         >
           <option value="">— off-system bet (no signal) —</option>
           {signals.map((s) => (
@@ -33,7 +40,7 @@ export default function BetForm({ signals }: { signals: OpenSignalForBet[] }) {
             </option>
           ))}
         </select>
-        {signals.length === 0 && (
+        {signals.length === 0 && !prefillSignal && (
           <p className="mt-1 text-xs text-zinc-500">
             No open signals right now. Bet via ticker below.
           </p>
@@ -45,12 +52,20 @@ export default function BetForm({ signals }: { signals: OpenSignalForBet[] }) {
           name="ticker"
           required
           placeholder="KXNHLGAME-26APR29MTLTB-TB"
+          defaultValue={prefillTicker}
+          key={`ticker-${prefillTicker}`}
           className={fieldStyle("font-mono")}
         />
       </Field>
 
       <Field label="Side">
-        <select name="side" required className={fieldStyle()} defaultValue="yes">
+        <select
+          name="side"
+          required
+          className={fieldStyle()}
+          defaultValue={prefillSide}
+          key={`side-${prefillSide}`}
+        >
           <option value="yes">YES</option>
           <option value="no">NO</option>
         </select>
@@ -64,6 +79,8 @@ export default function BetForm({ signals }: { signals: OpenSignalForBet[] }) {
           min="0.01"
           max="0.99"
           required
+          defaultValue={prefillFill}
+          key={`fill-${prefillFill}`}
           className={fieldStyle("tabular-nums")}
         />
       </Field>

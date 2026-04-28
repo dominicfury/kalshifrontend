@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Activity, ExternalLink, Zap } from "lucide-react";
 import Link from "next/link";
 
+import { AutoRefresh } from "@/components/layout/auto-refresh";
 import { SignalFilterBar } from "@/components/filters/signal-filters";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -178,11 +179,12 @@ export default async function SignalsPage({
   return (
     <>
       <PageHeader
-        eyebrow="Live · refreshes on each request"
+        eyebrow="Live · auto-refreshing"
         title="Signals"
         description="Real-time +EV opportunities across NHL game-line markets. Edge ≥ 0.5% after fees, sorted by detection time."
         actions={
           <div className="flex items-center gap-3 text-xs text-zinc-400">
+            <AutoRefresh intervalMs={30_000} />
             <span className="inline-flex items-center gap-1.5">
               <Activity className="size-3.5" />
               {signals.length} rows
