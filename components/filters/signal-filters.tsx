@@ -17,10 +17,10 @@ function Chip({ label, active, href, hint }: ChipProps) {
     <Link
       href={href}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
         active
-          ? "border-sky-400/60 bg-sky-500/15 text-sky-100 shadow-sm"
-          : "border-zinc-700 bg-zinc-900/60 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-50",
+          ? "border-sky-400 bg-sky-500 text-white shadow-sm hover:bg-sky-400"
+          : "border-zinc-600 bg-zinc-800 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-700",
       )}
     >
       {label}
