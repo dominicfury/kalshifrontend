@@ -30,8 +30,39 @@ export interface SignalRow {
   start_time: string;
 }
 
-export async function fetchRecentSignals(limit = 100): Promise<SignalRow[]> {
+export interface SignalFilters {
+  todayOnly?: boolean;       // detected today (UTC)
+  minEdge?: number;          // edge_pct_after_fees >= minEdge
+  alertedOnly?: boolean;     // alert_sent = 1
+  unresolvedOnly?: boolean;  // resolved_outcome IS NULL
+}
+
+
+export async function fetchRecentSignals(
+  limit = 100,
+  filters: SignalFilters = {},
+): Promise<SignalRow[]> {
   const db = getDb();
+  const where: string[] = [];
+  const args: (string | number)[] = [];
+
+  if (filters.todayOnly) {
+    where.push("s.detected_at >= datetime('now', 'start of day')");
+  }
+  if (filters.minEdge != null && filters.minEdge > 0) {
+    where.push("s.edge_pct_after_fees >= ?");
+    args.push(filters.minEdge);
+  }
+  if (filters.alertedOnly) {
+    where.push("s.alert_sent = 1");
+  }
+  if (filters.unresolvedOnly) {
+    where.push("s.resolved_outcome IS NULL");
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  args.push(limit);
+
   const result = await db.execute({
     sql: `
       SELECT s.id, s.detected_at,
@@ -47,10 +78,11 @@ export async function fetchRecentSignals(limit = 100): Promise<SignalRow[]> {
       FROM signals s
       JOIN kalshi_markets km ON s.kalshi_market_id = km.id
       JOIN events e ON km.event_id = e.id
+      ${whereSql}
       ORDER BY s.detected_at DESC
       LIMIT ?
     `,
-    args: [limit],
+    args,
   });
   return result.rows as unknown as SignalRow[];
 }
@@ -87,6 +119,39 @@ export async function fetchClvOverall(daysBack = 30): Promise<ClvOverall> {
     avg_edge: row.avg_edge == null ? null : Number(row.avg_edge),
   };
 }
+
+export interface ClvDayPoint {
+  day: string;          // YYYY-MM-DD UTC
+  n: number;
+  avg_clv: number | null;
+}
+
+
+export async function fetchClvDailyTrend(daysBack = 30): Promise<ClvDayPoint[]> {
+  const db = getDb();
+  const r = await db.execute({
+    sql: `
+      SELECT substr(detected_at, 1, 10) AS day,
+             COUNT(*) AS n,
+             AVG(clv_pct) AS avg_clv
+      FROM signals
+      WHERE detected_at >= datetime('now', ?)
+        AND clv_pct IS NOT NULL
+      GROUP BY day
+      ORDER BY day
+    `,
+    args: [`-${daysBack} days`],
+  });
+  return r.rows.map((row) => {
+    const o = row as unknown as Record<string, unknown>;
+    return {
+      day: String(o.day),
+      n: Number(o.n) || 0,
+      avg_clv: o.avg_clv == null ? null : Number(o.avg_clv),
+    };
+  });
+}
+
 
 export interface ClvBucket {
   bucket: string;

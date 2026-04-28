@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, Activity, Zap } from "lucide-react";
 
+import { SignalFilterBar } from "@/components/filters/signal-filters";
 import { Badge } from "@/components/ui/badge";
 import {
   DataTable,
@@ -12,9 +13,15 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/section";
 import { ago, num, pct, teamLabel } from "@/lib/format";
-import { fetchRecentSignals, type SignalRow } from "@/lib/queries";
+import {
+  fetchRecentSignals,
+  type SignalFilters,
+  type SignalRow,
+} from "@/lib/queries";
 
-export const revalidate = 30;
+// Filters are URL-driven, so we render on every request rather than ISR.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 
 function matchupLabel(s: SignalRow): string {
@@ -76,11 +83,34 @@ function stalenessCell(sec: number | null, staleAt: number) {
 }
 
 
-export default async function SignalsPage() {
+function parseFilters(sp: Record<string, string | string[] | undefined>): SignalFilters {
+  const get = (k: string) => {
+    const v = sp[k];
+    return Array.isArray(v) ? v[0] : v;
+  };
+  const minEdgeRaw = get("minEdge");
+  const minEdge = minEdgeRaw ? Number(minEdgeRaw) : undefined;
+  return {
+    todayOnly: get("today") === "1",
+    minEdge: Number.isFinite(minEdge) ? minEdge : undefined,
+    alertedOnly: get("alerted") === "1",
+    unresolvedOnly: get("unresolved") === "1",
+  };
+}
+
+
+export default async function SignalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const filters = parseFilters(sp);
+
   let signals: SignalRow[] = [];
   let error: string | null = null;
   try {
-    signals = await fetchRecentSignals(100);
+    signals = await fetchRecentSignals(100, filters);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -92,9 +122,9 @@ export default async function SignalsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Live · refreshes every 30s"
+        eyebrow="Live · refreshes on each request"
         title="Signals"
-        description="Real-time +EV opportunities across NHL game-line markets. Edge ≥ 0.5% after fees, sortable by post-fill edge."
+        description="Real-time +EV opportunities across NHL game-line markets. Edge ≥ 0.5% after fees, sorted by detection time."
         actions={
           <div className="flex items-center gap-3 text-xs text-zinc-400">
             <span className="inline-flex items-center gap-1.5">
@@ -115,6 +145,8 @@ export default async function SignalsPage() {
           </div>
         }
       />
+
+      <SignalFilterBar filters={filters} total={signals.length} />
 
       {error && (
         <div className="rounded-xl border border-rose-900/80 bg-rose-950/40 p-4 text-sm text-rose-200">

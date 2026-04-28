@@ -1,6 +1,8 @@
 import { Info, TrendingUp } from "lucide-react";
 
+import ClvTrendChart from "@/components/charts/clv-trend";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardBody } from "@/components/ui/card";
 import {
   DataTable,
   TBody,
@@ -15,6 +17,7 @@ import { clvColor, pct } from "@/lib/format";
 import {
   fetchClvByCategory,
   fetchClvByEdgeBucket,
+  fetchClvDailyTrend,
   fetchClvOverall,
 } from "@/lib/queries";
 
@@ -39,10 +42,11 @@ function clvTone(clv: number | null): "positive" | "negative" | "default" | "mut
 
 
 export default async function ClvPage() {
-  const [overall, byBucket, byCategory] = await Promise.all([
+  const [overall, byBucket, byCategory, trend] = await Promise.all([
     fetchClvOverall(30),
     fetchClvByEdgeBucket(),
     fetchClvByCategory(),
+    fetchClvDailyTrend(30),
   ]);
 
   return (
@@ -77,6 +81,18 @@ export default async function ClvPage() {
           hint={overall.avg_edge != null ? `avg edge ${pct(overall.avg_edge)}` : undefined}
         />
       </div>
+
+      <Section
+        eyebrow="trend"
+        title="Daily CLV (last 30 days)"
+        description="Each point is the average CLV across signals detected that day. Above zero = beating the closing line on average."
+      >
+        <Card>
+          <CardBody>
+            <ClvTrendChart data={trend} />
+          </CardBody>
+        </Card>
+      </Section>
 
       <Section
         eyebrow="diagnostic"
