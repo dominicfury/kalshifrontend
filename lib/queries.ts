@@ -28,6 +28,7 @@ export interface SignalRow {
   home_team: string;
   away_team: string;
   start_time: string;
+  sport: string;
 }
 
 export interface SignalFilters {
@@ -108,7 +109,7 @@ export async function fetchRecentSignals(
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl,
                km.ticker, km.market_type, km.period, km.line, km.raw_title,
-               e.home_team, e.away_team, e.start_time
+               e.home_team, e.away_team, e.start_time, e.sport
         FROM signals s
         JOIN kalshi_markets km ON s.kalshi_market_id = km.id
         JOIN events e ON km.event_id = e.id
@@ -133,7 +134,7 @@ export async function fetchRecentSignals(
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl,
                km.ticker, km.market_type, km.period, km.line, km.raw_title,
-               e.home_team, e.away_team, e.start_time
+               e.home_team, e.away_team, e.start_time, e.sport
         FROM ranked s
         JOIN kalshi_markets km ON s.kalshi_market_id = km.id
         JOIN events e ON km.event_id = e.id
@@ -221,7 +222,7 @@ export async function fetchSignalDetail(id: number): Promise<SignalDetail | null
              s.hypothetical_pnl,
              km.id AS kalshi_market_id,
              km.ticker, km.market_type, km.period, km.line, km.raw_title,
-             e.id AS event_id, e.home_team, e.away_team, e.start_time
+             e.id AS event_id, e.home_team, e.away_team, e.start_time, e.sport
       FROM signals s
       JOIN kalshi_markets km ON s.kalshi_market_id = km.id
       JOIN events e ON km.event_id = e.id
@@ -452,6 +453,36 @@ export async function fetchClvByCategory(): Promise<ClvByCategory[]> {
     };
   });
 }
+
+export interface ApiStatusRow {
+  api: string;
+  last_success_at: string | null;
+  last_error_at: string | null;
+  last_error_message: string | null;
+  quota_remaining: number | null;
+  quota_used: number | null;
+  quota_reset_hint: string | null;
+  metadata_json: string | null;
+  updated_at: string;
+}
+
+
+export async function fetchApiStatus(): Promise<ApiStatusRow[]> {
+  const db = getDb();
+  try {
+    const r = await db.execute(`
+      SELECT api, last_success_at, last_error_at, last_error_message,
+             quota_remaining, quota_used, quota_reset_hint,
+             metadata_json, updated_at
+      FROM api_status
+      ORDER BY api
+    `);
+    return r.rows as unknown as ApiStatusRow[];
+  } catch {
+    return [];
+  }
+}
+
 
 export interface HealthSnapshot {
   last_kalshi_poll: string | null;

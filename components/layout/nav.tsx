@@ -10,6 +10,7 @@ const NAV = [
   { href: "/clv", label: "CLV" },
   { href: "/persistence", label: "Persistence" },
   { href: "/health", label: "Health" },
+  { href: "/settings", label: "Settings" },
 ];
 
 

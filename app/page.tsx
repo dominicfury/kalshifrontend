@@ -282,6 +282,7 @@ export default async function SignalsPage({
                   href={sortHref}
                 />
               </Th>
+              <Th>Sport</Th>
               <Th>Matchup</Th>
               <Th>Market</Th>
               <Th align="right">
@@ -380,6 +381,11 @@ export default async function SignalsPage({
                     {ago(s.detected_at)}
                     <ExternalLink className="size-3 opacity-40" />
                   </Link>
+                </Td>
+                <Td>
+                  <Badge variant="muted" mono>
+                    {s.sport.toUpperCase()}
+                  </Badge>
                 </Td>
                 <Td>
                   <Link
