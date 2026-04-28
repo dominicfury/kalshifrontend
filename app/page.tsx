@@ -18,6 +18,7 @@ import { PageHeader } from "@/components/ui/section";
 import { SortHeader } from "@/components/ui/sort-header";
 import { ago, kalshiUrl, num, pct, teamLabel } from "@/lib/format";
 import {
+  fetchActiveSports,
   fetchRecentSignals,
   type SignalFilters,
   type SignalRow,
@@ -101,6 +102,7 @@ function parseFilters(sp: Record<string, string | string[] | undefined>): Signal
     alertedOnly: get("alerted") === "1",
     unresolvedOnly: get("unresolved") === "1",
     showAll: get("all") === "1",
+    sport: get("sport") || undefined,
   };
 }
 
@@ -149,6 +151,7 @@ function buildSortHref(
     params.set("sort", next.key);
     if (next.dir !== "desc") params.set("dir", next.dir);
   }
+  if (filters.sport) params.set("sport", filters.sport);
   const qs = params.toString();
   void current;  // dependency for memo callsites; current.key handled above
   return qs ? `/?${qs}` : "/";
@@ -167,9 +170,13 @@ export default async function SignalsPage({
     buildSortHref(sort, filters, { key, dir });
 
   let signals: SignalRow[] = [];
+  let activeSports: { sport: string; n: number }[] = [];
   let error: string | null = null;
   try {
-    signals = await fetchRecentSignals(100, filters, sort);
+    [signals, activeSports] = await Promise.all([
+      fetchRecentSignals(100, filters, sort),
+      fetchActiveSports(),
+    ]);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -236,7 +243,11 @@ export default async function SignalsPage({
         }
       />
 
-      <SignalFilterBar filters={filters} total={signals.length} />
+      <SignalFilterBar
+        filters={filters}
+        total={signals.length}
+        sports={activeSports}
+      />
 
       {error && (
         <div className="rounded-xl border border-rose-900/80 bg-rose-950/40 p-4 text-sm text-rose-200">

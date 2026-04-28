@@ -44,17 +44,32 @@ function buildHref(current: SignalFilters, patch: Partial<SignalFilters>): strin
   if (merged.alertedOnly) params.set("alerted", "1");
   if (merged.unresolvedOnly) params.set("unresolved", "1");
   if (merged.showAll) params.set("all", "1");
+  if (merged.sport) params.set("sport", merged.sport);
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
 }
 
 
+const SPORT_LABELS: Record<string, string> = {
+  nhl: "NHL",
+  nba: "NBA",
+  mlb: "MLB",
+  wnba: "WNBA",
+  tennis_atp: "ATP",
+  tennis_wta: "WTA",
+  ncaab: "NCAAB",
+  nfl: "NFL",
+};
+
+
 export function SignalFilterBar({
   filters,
   total,
+  sports = [],
 }: {
   filters: SignalFilters;
   total: number;
+  sports?: { sport: string; n: number }[];
 }) {
   const minEdgePresets: { value: number; label: string }[] = [
     { value: 0.005, label: "≥ 0.5%" },
@@ -67,7 +82,8 @@ export function SignalFilterBar({
     filters.todayOnly ||
     (filters.minEdge != null && filters.minEdge > 0) ||
     filters.alertedOnly ||
-    filters.unresolvedOnly;
+    filters.unresolvedOnly ||
+    !!filters.sport;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -106,6 +122,21 @@ export function SignalFilterBar({
           })}
         />
       ))}
+      {sports.length > 0 && (
+        <>
+          <span className="ml-2 text-zinc-500">·</span>
+          {sports.map((s) => (
+            <Chip
+              key={s.sport}
+              label={`${SPORT_LABELS[s.sport] ?? s.sport.toUpperCase()} (${s.n})`}
+              active={filters.sport === s.sport}
+              href={buildHref(filters, {
+                sport: filters.sport === s.sport ? undefined : s.sport,
+              })}
+            />
+          ))}
+        </>
+      )}
       {anyFilter && (
         <Link
           href="/"

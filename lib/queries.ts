@@ -37,6 +37,7 @@ export interface SignalFilters {
   alertedOnly?: boolean;     // alert_sent = 1
   unresolvedOnly?: boolean;  // resolved_outcome IS NULL
   showAll?: boolean;         // false (default) = latest signal per market+side; true = full history
+  sport?: string;            // 'nhl' | 'nba' | 'mlb' | 'wnba' | 'tennis_atp' | 'tennis_wta'
 }
 
 
@@ -88,6 +89,12 @@ export async function fetchRecentSignals(
   }
   if (filters.unresolvedOnly) {
     where.push("s.resolved_outcome IS NULL");
+  }
+  if (filters.sport) {
+    where.push(
+      "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km JOIN events e ON km.event_id = e.id WHERE e.sport = ?)",
+    );
+    args.push(filters.sport);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -184,6 +191,23 @@ export async function fetchClvOverall(daysBack = 30): Promise<ClvOverall> {
     avg_edge: row.avg_edge == null ? null : Number(row.avg_edge),
   };
 }
+
+export async function fetchActiveSports(): Promise<{ sport: string; n: number }[]> {
+  const db = getDb();
+  const r = await db.execute(`
+    SELECT e.sport, COUNT(*) AS n
+    FROM signals s
+    JOIN kalshi_markets km ON s.kalshi_market_id = km.id
+    JOIN events e ON km.event_id = e.id
+    GROUP BY e.sport
+    ORDER BY n DESC
+  `);
+  return r.rows.map((row) => {
+    const o = row as unknown as Record<string, unknown>;
+    return { sport: String(o.sport), n: Number(o.n) || 0 };
+  });
+}
+
 
 export interface SignalDetail {
   signal: SignalRow;
