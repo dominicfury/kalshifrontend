@@ -212,7 +212,7 @@ export default async function SettingsPage() {
         eyebrow="reference"
         title={
           <span className="inline-flex items-center gap-2">
-            <Cog className="size-4 text-sky-300" />
+            <Cog className="size-4 text-orange-300" />
             Configuration values
           </span>
         }

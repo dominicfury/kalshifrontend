@@ -189,7 +189,7 @@ export default async function ClvPage() {
         eyebrow="reference"
         title={
           <span className="inline-flex items-center gap-2">
-            <Info className="size-4 text-sky-400/80" /> Interpretation guide
+            <Info className="size-4 text-orange-400/80" /> Interpretation guide
           </span>
         }
       >

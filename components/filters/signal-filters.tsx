@@ -19,13 +19,13 @@ function Chip({ label, active, href, hint }: ChipProps) {
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
         active
-          ? "border-sky-400 bg-sky-500 text-white shadow-sm hover:bg-sky-400"
+          ? "border-orange-400 bg-orange-500 text-white shadow-sm hover:bg-orange-400"
           : "border-zinc-600 bg-zinc-800 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-700",
       )}
     >
       {label}
       {active && hint && (
-        <span className="text-[10px] uppercase tracking-wide text-sky-400">
+        <span className="text-[10px] uppercase tracking-wide text-orange-300">
           {hint}
         </span>
       )}

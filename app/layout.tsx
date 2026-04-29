@@ -35,7 +35,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-zinc-950 text-zinc-100">
-        <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-sky-950/30 via-transparent to-transparent" />
+        <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-orange-950/30 via-transparent to-transparent" />
 
         <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/60">
           <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
@@ -47,7 +47,7 @@ export default function RootLayout({
                   width={1178}
                   height={1135}
                   priority
-                  className="h-14 w-auto"
+                  className="h-28 w-auto"
                 />
               </a>
               <Nav />

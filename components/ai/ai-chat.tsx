@@ -41,7 +41,7 @@ export function AIChatTrigger({
           aria-label="Ask AI"
           title="Ask AI about this signal"
           className={cn(
-            "inline-flex items-center justify-center rounded-md p-1.5 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-sky-200",
+            "inline-flex items-center justify-center rounded-md p-1.5 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-orange-200",
             className,
           )}
         >
@@ -152,7 +152,7 @@ function AIChatDialog({
       <div className="flex h-[85vh] w-full max-w-2xl flex-col rounded-t-xl border border-zinc-700 bg-zinc-950 shadow-2xl sm:h-[600px] sm:rounded-xl">
         <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
           <div className="flex items-center gap-2">
-            <Bot className="size-4 text-sky-300" />
+            <Bot className="size-4 text-orange-300" />
             <span className="text-sm font-semibold text-zinc-100">
               {context.title}
             </span>
@@ -186,7 +186,7 @@ function AIChatDialog({
                 className={cn(
                   "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                   m.role === "user"
-                    ? "bg-sky-500 text-white"
+                    ? "bg-orange-500 text-white"
                     : "bg-zinc-900 text-zinc-100 border border-zinc-800",
                 )}
               >
@@ -224,12 +224,12 @@ function AIChatDialog({
             }}
             placeholder="Follow up with a question…"
             rows={1}
-            className="flex-1 resize-none rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-sky-400/60 focus:outline-none focus:ring-2 focus:ring-sky-500/30"
+            className="flex-1 resize-none rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-400/60 focus:outline-none focus:ring-2 focus:ring-orange-500/30"
           />
           <button
             type="submit"
             disabled={pending || !input.trim()}
-            className="inline-flex items-center justify-center rounded-md bg-sky-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-sky-400 disabled:opacity-50"
+            className="inline-flex items-center justify-center rounded-md bg-orange-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-400 disabled:opacity-50"
             aria-label="Send"
           >
             {pending ? (

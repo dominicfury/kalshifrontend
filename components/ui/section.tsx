@@ -60,7 +60,7 @@ export function PageHeader({
     <header className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-700 pb-5">
       <div>
         {eyebrow && (
-          <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-sky-200">
+          <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-orange-300">
             {eyebrow}
           </div>
         )}

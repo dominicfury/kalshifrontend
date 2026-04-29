@@ -7,9 +7,9 @@ export const maxDuration = 60;
 // backend. Holds the shared X-Repoll-Token server-side so it never leaves
 // Vercel's edge — the browser only sees a same-origin POST.
 export async function POST() {
-  const backendUrl = process.env.BACKEND_URL;
+  const rawBackendUrl = process.env.BACKEND_URL;
   const token = process.env.REPOLL_TOKEN;
-  if (!backendUrl) {
+  if (!rawBackendUrl) {
     return NextResponse.json(
       { error: "BACKEND_URL not configured on the dashboard" },
       { status: 503 },
@@ -22,9 +22,17 @@ export async function POST() {
     );
   }
 
+  // Tolerate values pasted without the scheme (just the hostname). Railway's
+  // public-domain UI shows "kalshibackend-production-xxxx.up.railway.app",
+  // and people copy that without remembering the https://.
+  let backendUrl = rawBackendUrl.trim().replace(/\/$/, "");
+  if (!/^https?:\/\//i.test(backendUrl)) {
+    backendUrl = `https://${backendUrl}`;
+  }
+
   let r: Response;
   try {
-    r = await fetch(`${backendUrl.replace(/\/$/, "")}/repoll`, {
+    r = await fetch(`${backendUrl}/repoll`, {
       method: "POST",
       headers: {
         "X-Repoll-Token": token,
