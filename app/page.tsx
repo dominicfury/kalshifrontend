@@ -384,8 +384,24 @@ export default async function SignalsPage({
             </Tr>
           </THead>
           <TBody>
-            {signals.map((s) => (
-              <Tr key={s.id}>
+            {signals.map((s) => {
+              // Visual flag for rows that need extra investigation:
+              //   - rose tint: Kalshi market hasn't moved in >10 min (stale book →
+              //     consensus is moving on info, Kalshi isn't, edge is a trap)
+              //   - amber tint: edge >= 5% — spec says "treat with deep suspicion"
+              //
+              // Stale takes priority because new generation now filters those out
+              // — any stale row visible is legacy data from before the filter.
+              const isStale =
+                s.kalshi_staleness_sec != null && s.kalshi_staleness_sec > 600;
+              const isHugeEdge = s.edge_pct_after_fees >= 0.05;
+              const rowTone = isStale
+                ? "bg-rose-950/30"
+                : isHugeEdge
+                  ? "bg-amber-950/20"
+                  : "";
+              return (
+              <Tr key={s.id} className={rowTone}>
                 <Td muted>
                   <Link
                     href={`/signals/${s.id}`}
@@ -481,7 +497,8 @@ export default async function SignalsPage({
                   </div>
                 </Td>
               </Tr>
-            ))}
+              );
+            })}
           </TBody>
         </DataTable>
       )}
