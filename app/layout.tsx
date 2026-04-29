@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Image from "next/image";
 import { Suspense } from "react";
 
 import LiveIndicator from "@/components/layout/live-indicator";
@@ -18,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Kalshi NHL +EV",
-  description: "Live signals, CLV tracking, and bet log.",
+  title: "I'm Gone x3",
+  description: "Live +EV signals and CLV tracking.",
 };
 
 
@@ -39,18 +40,15 @@ export default function RootLayout({
         <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/60">
           <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
             <div className="flex items-center gap-6">
-              <a href="/" className="flex items-center gap-2 group">
-                <span className="grid h-7 w-7 place-items-center rounded-md border border-sky-400/50 bg-sky-500/15 text-sm font-bold text-sky-200 shadow-[inset_0_0_12px_rgba(56,189,248,0.25)]">
-                  K
-                </span>
-                <div className="leading-tight">
-                  <div className="text-sm font-semibold tracking-tight text-zinc-50">
-                    kalshi-nhl-ev
-                  </div>
-                  <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-400">
-                    +ev signal generator
-                  </div>
-                </div>
+              <a href="/" className="flex items-center group" aria-label="I'm Gone x3 home">
+                <Image
+                  src="/logo.png"
+                  alt="I'm Gone x3"
+                  width={2816}
+                  height={1536}
+                  priority
+                  className="h-10 w-auto"
+                />
               </a>
               <Nav />
             </div>
