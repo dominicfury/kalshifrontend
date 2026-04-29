@@ -96,6 +96,14 @@ export async function fetchRecentSignals(
     );
     args.push(filters.sport);
   }
+  // Default view hides "trap" signals: stale Kalshi books (price sat for
+  // >10 min, almost certainly drifting from current consensus) and huge
+  // edges >5% (almost always settlement-rule mismatch or data bug per
+  // spec §2). Visible via ?all=1 for investigation / CLV bucket review.
+  if (!filters.showAll) {
+    where.push("(s.kalshi_staleness_sec IS NULL OR s.kalshi_staleness_sec <= 600)");
+    where.push("s.edge_pct_after_fees < 0.05");
+  }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const sortColumn = SORT_SQL[sort.key];
@@ -206,6 +214,68 @@ export async function fetchActiveSports(): Promise<{ sport: string; n: number }[
     const o = row as unknown as Record<string, unknown>;
     return { sport: String(o.sport), n: Number(o.n) || 0 };
   });
+}
+
+
+export type SportActivityStatus = "live" | "soon" | "dark";
+
+export interface SportActivity {
+  sport: string;
+  status: SportActivityStatus;
+  next_event_in_hours: number | null;
+  events_24h: number;
+}
+
+// Bucket cutoffs for the per-sport indicator dot.
+const SPORT_LIVE_HOURS = 2;     // game in next 2h or recently started → 🟢
+const SPORT_SOON_HOURS = 24;    // game in next 24h → 🟡
+const SPORT_BACKWINDOW_H = 4;   // count games started in the last 4h as still relevant
+
+export async function fetchSportActivity(): Promise<SportActivity[]> {
+  const db = getDb();
+  const r = await db.execute({
+    sql: `
+      SELECT
+        sport,
+        COUNT(*) AS events_24h,
+        MIN((julianday(start_time) - julianday('now')) * 24) AS hours_to_next
+      FROM events
+      WHERE start_time >= datetime('now', '-' || ? || ' hours')
+        AND start_time <= datetime('now', '+' || ? || ' hours')
+      GROUP BY sport
+    `,
+    args: [SPORT_BACKWINDOW_H, SPORT_SOON_HOURS],
+  });
+
+  const rows = r.rows.map((row) => {
+    const o = row as unknown as Record<string, unknown>;
+    const hours = o.hours_to_next == null ? null : Number(o.hours_to_next);
+    let status: SportActivityStatus = "dark";
+    if (hours != null && hours <= SPORT_LIVE_HOURS) status = "live";
+    else if (hours != null && hours <= SPORT_SOON_HOURS) status = "soon";
+    return {
+      sport: String(o.sport),
+      status,
+      next_event_in_hours: hours,
+      events_24h: Number(o.events_24h) || 0,
+    };
+  });
+
+  // Backfill the sports we support but have no upcoming events for so the
+  // dashboard shows them as 'dark' rather than hiding them entirely (silence
+  // tells you "off-season / off-day," not "we forgot about this sport").
+  const known = ["nhl", "nba", "mlb", "wnba", "tennis_atp", "tennis_wta"];
+  const seen = new Set(rows.map((r) => r.sport));
+  for (const sport of known) {
+    if (!seen.has(sport)) {
+      rows.push({ sport, status: "dark", next_event_in_hours: null, events_24h: 0 });
+    }
+  }
+
+  // Sort: live → soon → dark, then alphabetical within each.
+  const order: Record<SportActivityStatus, number> = { live: 0, soon: 1, dark: 2 };
+  rows.sort((a, b) => order[a.status] - order[b.status] || a.sport.localeCompare(b.sport));
+  return rows;
 }
 
 

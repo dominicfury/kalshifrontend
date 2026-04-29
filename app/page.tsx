@@ -1,9 +1,10 @@
-import { ArrowDown, ArrowUp, Activity, ExternalLink, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, Activity, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import { AIChatTrigger } from "@/components/ai/ai-chat";
 import { AutoRefresh } from "@/components/layout/auto-refresh";
 import RepollButton from "@/components/layout/repoll-button";
+import { SportActivityBar } from "@/components/layout/sport-activity-bar";
 import { SignalFilterBar } from "@/components/filters/signal-filters";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,15 +16,16 @@ import {
   Tr,
 } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/ui/section";
 import { SortHeader } from "@/components/ui/sort-header";
 import { ago, kalshiUrl, num, pct, teamLabel } from "@/lib/format";
 import {
   fetchActiveSports,
   fetchRecentSignals,
+  fetchSportActivity,
   type SignalFilters,
   type SignalRow,
   type SignalSortKey,
+  type SportActivity,
 } from "@/lib/queries";
 
 // Filters are URL-driven, so we render on every request rather than ISR.
@@ -172,78 +174,69 @@ export default async function SignalsPage({
 
   let signals: SignalRow[] = [];
   let activeSports: { sport: string; n: number }[] = [];
+  let sportActivity: SportActivity[] = [];
   let error: string | null = null;
   try {
-    [signals, activeSports] = await Promise.all([
+    [signals, activeSports, sportActivity] = await Promise.all([
       fetchRecentSignals(100, filters, sort),
       fetchActiveSports(),
+      fetchSportActivity(),
     ]);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
 
-  const flagged = signals.filter((s) => s.edge_pct_after_fees >= 0.05).length;
   const positiveClv = signals.filter((s) => s.clv_pct != null && s.clv_pct > 0).length;
   const withClv = signals.filter((s) => s.clv_pct != null).length;
 
   return (
     <>
-      <PageHeader
-        eyebrow="Live · auto-refreshing"
-        title="Kalshi +EV signals"
-        description="Each row is a Kalshi NHL contract priced below fair value. 'Fair' is the multi-book sportsbook consensus (used as the oracle, not as a bet target — you can only trade on Kalshi). Click a row to see the per-book breakdown and buy."
-        actions={
-          <div className="flex items-center gap-3 text-xs text-zinc-300">
-            <RepollButton />
-            <AutoRefresh intervalMs={30_000} />
-            <span className="inline-flex items-center gap-1.5">
-              <Activity className="size-3.5" />
-              {signals.length} rows
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+        <SportActivityBar activity={sportActivity} />
+        <div className="flex items-center gap-3 text-xs text-zinc-300">
+          <RepollButton />
+          <AutoRefresh intervalMs={30_000} />
+          <span className="inline-flex items-center gap-1.5">
+            <Activity className="size-3.5" />
+            {signals.length} rows
+          </span>
+          {withClv > 0 && (
+            <span className="text-zinc-300">
+              {positiveClv}/{withClv} CLV+
             </span>
-            {flagged > 0 && (
-              <Badge variant="warning">
-                <Zap className="size-3" />
-                {flagged} flagged ≥ 5%
-              </Badge>
-            )}
-            {withClv > 0 && (
-              <span className="text-zinc-300">
-                {positiveClv}/{withClv} CLV+
-              </span>
-            )}
-            {signals.length > 0 && (
-              <AIChatTrigger
-                variant="button"
-                context={{
-                  type: "all_signals",
-                  title: "AI summary of all signals",
-                  payload: signals.slice(0, 25).map((s) => ({
-                    id: s.id,
-                    matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
-                    market_type: s.market_type,
-                    line: s.line,
-                    side: s.side,
-                    kalshi_yes_ask: s.kalshi_yes_ask,
-                    kalshi_no_ask: s.kalshi_no_ask,
-                    fair_yes_prob: s.fair_yes_prob,
-                    edge_pct_after_fees: s.edge_pct_after_fees,
-                    edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
-                    yes_book_depth: s.yes_book_depth,
-                    n_books_used: s.n_books_used,
-                    book_staleness_sec: s.book_staleness_sec,
-                    kalshi_staleness_sec: s.kalshi_staleness_sec,
-                    clv_pct: s.clv_pct,
-                    detected_at: s.detected_at,
-                    ticker: s.ticker,
-                  })),
-                  seedPrompt:
-                    "Rank these signals from most-actionable to most-suspicious. Flag any that look like data bugs vs real edges. Be terse.",
-                }}
-              />
-            )}
-          </div>
-        }
-      />
+          )}
+          {signals.length > 0 && (
+            <AIChatTrigger
+              variant="button"
+              context={{
+                type: "all_signals",
+                title: "AI summary of all signals",
+                payload: signals.slice(0, 25).map((s) => ({
+                  id: s.id,
+                  matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
+                  market_type: s.market_type,
+                  line: s.line,
+                  side: s.side,
+                  kalshi_yes_ask: s.kalshi_yes_ask,
+                  kalshi_no_ask: s.kalshi_no_ask,
+                  fair_yes_prob: s.fair_yes_prob,
+                  edge_pct_after_fees: s.edge_pct_after_fees,
+                  edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
+                  yes_book_depth: s.yes_book_depth,
+                  n_books_used: s.n_books_used,
+                  book_staleness_sec: s.book_staleness_sec,
+                  kalshi_staleness_sec: s.kalshi_staleness_sec,
+                  clv_pct: s.clv_pct,
+                  detected_at: s.detected_at,
+                  ticker: s.ticker,
+                })),
+                seedPrompt:
+                  "Rank these signals from most-actionable to most-suspicious. Flag any that look like data bugs vs real edges. Be terse.",
+              }}
+            />
+          )}
+        </div>
+      </div>
 
       <SignalFilterBar
         filters={filters}
