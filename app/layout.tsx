@@ -44,10 +44,10 @@ export default function RootLayout({
                 <Image
                   src="/logo.png"
                   alt="I'm Gone x3"
-                  width={2816}
-                  height={1536}
+                  width={1178}
+                  height={1135}
                   priority
-                  className="h-10 w-auto"
+                  className="h-14 w-auto"
                 />
               </a>
               <Nav />

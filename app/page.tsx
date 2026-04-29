@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { AIChatTrigger } from "@/components/ai/ai-chat";
 import { AutoRefresh } from "@/components/layout/auto-refresh";
+import RepollButton from "@/components/layout/repoll-button";
 import { SignalFilterBar } from "@/components/filters/signal-filters";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -193,6 +194,7 @@ export default async function SignalsPage({
         description="Each row is a Kalshi NHL contract priced below fair value. 'Fair' is the multi-book sportsbook consensus (used as the oracle, not as a bet target — you can only trade on Kalshi). Click a row to see the per-book breakdown and buy."
         actions={
           <div className="flex items-center gap-3 text-xs text-zinc-300">
+            <RepollButton />
             <AutoRefresh intervalMs={30_000} />
             <span className="inline-flex items-center gap-1.5">
               <Activity className="size-3.5" />
