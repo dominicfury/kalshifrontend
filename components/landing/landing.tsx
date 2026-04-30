@@ -39,10 +39,10 @@ export function LandingPage() {
             <Image
               src="/logo.png"
               alt="Sportsbetbrain"
-              width={360}
-              height={316}
+              width={474}
+              height={530}
               priority
-              className="h-20 w-auto"
+              className="h-16 w-auto sm:h-24"
             />
           </Link>
           <div className="flex items-center gap-2">
@@ -70,10 +70,10 @@ export function LandingPage() {
           <Image
             src="/logo.png"
             alt="Sportsbetbrain"
-            width={360}
-            height={316}
+            width={474}
+            height={530}
             priority
-            className="mx-auto h-72 w-auto drop-shadow-[0_0_24px_rgba(0,0,0,0.6)]"
+            className="mx-auto h-48 w-auto sm:h-72 lg:h-96 drop-shadow-[0_0_24px_rgba(0,0,0,0.6)]"
           />
           <h1 className="mt-8 text-4xl font-bold tracking-tight text-white sm:text-5xl">
             +EV trading on Kalshi sports markets

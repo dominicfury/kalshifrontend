@@ -25,7 +25,7 @@ export default function Nav({ role }: { role: "user" | "admin" }) {
   const pathname = usePathname();
   const items = NAV.filter((n) => !n.adminOnly || role === "admin");
   return (
-    <nav className="flex items-center gap-1">
+    <nav className="flex flex-wrap items-center gap-1">
       {items.map((n) => {
         const active = n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
         return (
@@ -33,7 +33,7 @@ export default function Nav({ role }: { role: "user" | "admin" }) {
             key={n.href}
             href={n.href}
             className={cn(
-              "relative px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              "relative rounded-md px-2 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:text-sm",
               active
                 ? "text-zinc-50 bg-zinc-800"
                 : "text-zinc-300 hover:text-zinc-50 hover:bg-zinc-900",

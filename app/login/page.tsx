@@ -12,10 +12,10 @@ export default function LoginPage() {
           <Image
             src="/logo.png"
             alt="Sportsbetbrain"
-            width={360}
-            height={316}
+            width={474}
+            height={530}
             priority
-            className="h-40 w-auto"
+            className="h-32 w-auto sm:h-48"
           />
         </div>
         <LoginForm />

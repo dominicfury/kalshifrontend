@@ -239,36 +239,6 @@ export default async function SignalsPage({
               {positiveClv}/{withClv} CLV+
             </span>
           )}
-          {signals.length > 0 && (
-            <AIChatTrigger
-              variant="button"
-              context={{
-                type: "all_signals",
-                title: "AI summary of all signals",
-                payload: signals.slice(0, 25).map((s) => ({
-                  id: s.id,
-                  matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
-                  market_type: s.market_type,
-                  line: s.line,
-                  side: s.side,
-                  kalshi_yes_ask: s.kalshi_yes_ask,
-                  kalshi_no_ask: s.kalshi_no_ask,
-                  fair_yes_prob: s.fair_yes_prob,
-                  edge_pct_after_fees: s.edge_pct_after_fees,
-                  edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
-                  yes_book_depth: s.yes_book_depth,
-                  n_books_used: s.n_books_used,
-                  book_staleness_sec: s.book_staleness_sec,
-                  kalshi_staleness_sec: s.kalshi_staleness_sec,
-                  clv_pct: s.clv_pct,
-                  detected_at: s.detected_at,
-                  ticker: s.ticker,
-                })),
-                seedPrompt:
-                  "Rank these signals from most-actionable to most-suspicious. Flag any that look like data bugs vs real edges. Be terse.",
-              }}
-            />
-          )}
         </div>
       </div>
 

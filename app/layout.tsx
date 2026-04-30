@@ -26,6 +26,16 @@ export const metadata: Metadata = {
   description: "Live +EV signals and CLV tracking.",
 };
 
+// Tells iOS Safari + Chrome on Android what to color the status bar /
+// address bar with — matches the page's dark zinc-950 so there's no
+// jarring white strip above the header.
+export const viewport = {
+  themeColor: "#09090b",
+  initialScale: 1,
+  // user-scalable left enabled (accessibility). Form inputs use 16px+
+  // font-size to avoid iOS Safari's auto-zoom-on-focus behavior.
+};
+
 // Trial state changes when admin verifies — never cache the layout.
 export const dynamic = "force-dynamic";
 
@@ -53,16 +63,16 @@ export default async function RootLayout({
         ) : (
           <>
             <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/60">
-              <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-3">
-                <div className="flex items-center gap-6">
+              <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-4 py-2 sm:gap-4 sm:px-6 sm:py-3">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-6">
                   <a href="/" className="flex items-center group" aria-label="Sportsbetbrain home">
                     <Image
                       src="/logo.png"
                       alt="Sportsbetbrain"
-                      width={360}
-                      height={316}
+                      width={474}
+                      height={530}
                       priority
-                      className="h-24 w-auto"
+                      className="h-20 w-auto sm:h-32"
                     />
                   </a>
                   <Nav role={trial.kind === "admin" ? "admin" : "user"} />
