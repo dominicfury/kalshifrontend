@@ -10,9 +10,9 @@ export function PendingApproval({ username }: { username: string }) {
         <Image
           src="/logo.png"
           alt="Sportsbetbrain"
-          width={2467}
-          height={1194}
-          className="mx-auto h-24 w-auto opacity-80"
+          width={360}
+          height={316}
+          className="mx-auto h-32 w-auto opacity-80"
         />
         <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-6">
           <ShieldQuestion className="mx-auto size-10 text-amber-400" />

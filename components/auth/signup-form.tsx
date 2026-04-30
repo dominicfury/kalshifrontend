@@ -112,8 +112,22 @@ export function SignupForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
         cache: "no-store",
       });
       const body = await r.json().catch(() => ({}));
+      // 409 "email already verified" means a previous attempt succeeded
+      // server-side (e.g. cookie-set failed but email_verified flipped).
+      // Treat it as success — push the user to /login.
+      if (r.status === 409 && body?.error?.toString().includes("already verified")) {
+        window.location.href = "/login?verified=1";
+        return;
+      }
       if (!r.ok) {
         setError(body?.error || `HTTP ${r.status}`);
+        return;
+      }
+      // If the verify endpoint couldn't set the cookie (e.g. JWT_SECRET
+      // misconfigured), it returns ok=true with needs_login=true. Bounce
+      // them to /login instead of dashboard.
+      if (body?.needs_login) {
+        window.location.href = "/login?verified=1";
         return;
       }
       // Cookie is set by the verify endpoint. Hard-navigate so middleware

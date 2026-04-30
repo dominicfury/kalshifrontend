@@ -69,39 +69,60 @@ export async function POST(req: Request) {
     );
   }
 
-  // Email verified → auto-log them in for the 12-hour trial. Admin still
-  // needs to flip verified=1 within 12h or they get locked out.
+  // Email verified. Try to auto-log them in — but if cookie signing or any
+  // post-verification side-effect throws, we still return success because
+  // the verification itself already succeeded. Otherwise the user sees 500
+  // on the first click, retries, and gets "already verified" stuck. The
+  // frontend will fall back to redirecting them to /login on `needs_login`.
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
     req.headers.get("x-real-ip") ||
     null;
   const ua = req.headers.get("user-agent") || null;
 
-  const token = await signToken({
-    sub: user.id,
-    username: user.username,
-    role: user.role,
-  });
-  const c = await cookies();
-  c.set(AUTH_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: AUTH_COOKIE_MAX_AGE,
-  });
+  let cookieSet = false;
+  try {
+    const token = await signToken({
+      sub: user.id,
+      username: user.username,
+      role: user.role,
+    });
+    const c = await cookies();
+    c.set(AUTH_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: AUTH_COOKIE_MAX_AGE,
+    });
+    cookieSet = true;
+  } catch (e) {
+    // Most likely cause: JWT_SECRET missing/short on Vercel. Don't crash
+    // the verification — the user is verified; they can log in manually.
+    console.error("verify-email: auto-login cookie failed:", e);
+  }
 
-  await recordLogin(user.id);
-  await logActivity({
-    user_id: user.id,
-    action: "login",
-    metadata: { via: "email_verify" },
-    ip,
-    user_agent: ua,
-  });
+  // Best-effort logging. Failures here MUST NOT throw past the response.
+  try {
+    await recordLogin(user.id);
+  } catch (e) {
+    console.error("verify-email: recordLogin failed:", e);
+  }
+  try {
+    await logActivity({
+      user_id: user.id,
+      action: "login",
+      metadata: { via: "email_verify" },
+      ip,
+      user_agent: ua,
+    });
+  } catch (e) {
+    console.error("verify-email: logActivity failed:", e);
+  }
 
   return NextResponse.json({
     ok: true,
     user: { id: user.id, username: user.username, role: user.role },
+    needs_login: !cookieSet,
   });
 }

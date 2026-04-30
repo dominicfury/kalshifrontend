@@ -59,10 +59,10 @@ export default async function RootLayout({
                     <Image
                       src="/logo.png"
                       alt="Sportsbetbrain"
-                      width={2467}
-                      height={1194}
+                      width={360}
+                      height={316}
                       priority
-                      className="h-16 w-auto"
+                      className="h-24 w-auto"
                     />
                   </a>
                   <Nav role={trial.kind === "admin" ? "admin" : "user"} />

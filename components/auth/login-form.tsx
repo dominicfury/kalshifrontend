@@ -10,6 +10,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/";
+  const justVerified = searchParams.get("verified") === "1";
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +46,11 @@ export function LoginForm() {
       onSubmit={submit}
       className="space-y-4 rounded-xl border border-zinc-700 bg-zinc-900/60 p-6 shadow-2xl backdrop-blur"
     >
+      {justVerified && (
+        <div className="rounded-md border border-emerald-900/60 bg-emerald-950/30 p-2 text-xs text-emerald-200">
+          Email verified — sign in to start your 12h trial.
+        </div>
+      )}
       <div className="space-y-1.5">
         <label
           htmlFor="username"
