@@ -24,6 +24,12 @@ export const KNOWN_KEYS = {
   DEFAULT_AI_QUOTA_DAILY: "default_ai_quota_daily",
   ODDS_QUOTA_RESERVE: "odds_quota_reserve",
   USER_REPOLL_QUOTA_DAILY: "user_repoll_quota_daily",
+  SPORT_ENABLED_NHL: "sport_enabled_nhl",
+  SPORT_ENABLED_NBA: "sport_enabled_nba",
+  SPORT_ENABLED_MLB: "sport_enabled_mlb",
+  SPORT_ENABLED_WNBA: "sport_enabled_wnba",
+  SPORT_ENABLED_TENNIS_ATP: "sport_enabled_tennis_atp",
+  SPORT_ENABLED_TENNIS_WTA: "sport_enabled_tennis_wta",
 } as const;
 
 export const DEFAULT_VALUES: Record<string, string> = {
@@ -32,6 +38,12 @@ export const DEFAULT_VALUES: Record<string, string> = {
   [KNOWN_KEYS.DEFAULT_AI_QUOTA_DAILY]: "10",
   [KNOWN_KEYS.ODDS_QUOTA_RESERVE]: "1000",
   [KNOWN_KEYS.USER_REPOLL_QUOTA_DAILY]: "0",
+  [KNOWN_KEYS.SPORT_ENABLED_NHL]: "1",
+  [KNOWN_KEYS.SPORT_ENABLED_NBA]: "1",
+  [KNOWN_KEYS.SPORT_ENABLED_MLB]: "1",
+  [KNOWN_KEYS.SPORT_ENABLED_WNBA]: "1",
+  [KNOWN_KEYS.SPORT_ENABLED_TENNIS_ATP]: "1",
+  [KNOWN_KEYS.SPORT_ENABLED_TENNIS_WTA]: "1",
 };
 
 export async function getInt(key: string, fallback: number): Promise<number> {

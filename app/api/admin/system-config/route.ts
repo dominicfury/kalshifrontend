@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { isSameOrigin, requireAdmin } from "@/lib/session";
@@ -30,6 +31,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "no entries to save" }, { status: 400 });
   }
 
+  let touchedSportToggle = false;
   for (const e of entries) {
     if (typeof e.key !== "string" || typeof e.value !== "string") {
       return NextResponse.json(
@@ -47,7 +49,23 @@ export async function POST(req: Request) {
         );
       }
     }
+    // Sport toggles are strict booleans-as-strings.
+    if (/^sport_enabled_/.test(e.key)) {
+      if (e.value !== "0" && e.value !== "1") {
+        return NextResponse.json(
+          { error: `${e.key} must be "0" or "1"` },
+          { status: 400 },
+        );
+      }
+      touchedSportToggle = true;
+    }
     await setValue(e.key, e.value, admin.sub);
+  }
+
+  // Activity bar is cached for 60s — expire it immediately so the change
+  // is visible on the next page load instead of after the cache window.
+  if (touchedSportToggle) {
+    revalidateTag("sport-activity", { expire: 0 });
   }
 
   return NextResponse.json({ ok: true, saved: entries.length });

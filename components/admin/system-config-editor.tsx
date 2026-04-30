@@ -6,15 +6,17 @@ import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
+type FieldUnit = "sec" | "count" | "toggle";
+
 interface Field {
   key: string;
   label: string;
   hint: string;
-  unit: "sec" | "count";
+  unit: FieldUnit;
   value: string;
 }
 
-function describe(unit: "sec" | "count", n: number): string {
+function describe(unit: FieldUnit, n: number): string {
   if (unit === "count") return `${n}`;
   if (n < 60) return `${n}s`;
   if (n < 3600) return `${Math.round(n / 60)}m`;
@@ -76,6 +78,39 @@ export function SystemConfigEditor({ fields }: { fields: Field[] }) {
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
         {fields.map((f) => {
+          if (f.unit === "toggle") {
+            const on = values[f.key] === "1";
+            return (
+              <div key={f.key} className="space-y-1">
+                <label className="flex items-baseline justify-between gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-300">
+                  <span>{f.label}</span>
+                  <span
+                    className={cn(
+                      "font-mono normal-case text-[10px]",
+                      on ? "text-emerald-300" : "text-zinc-500",
+                    )}
+                  >
+                    {on ? "on" : "off"}
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setValues((v) => ({ ...v, [f.key]: on ? "0" : "1" }))
+                  }
+                  className={cn(
+                    "w-full rounded-md border px-3 py-2 text-sm font-semibold transition-colors",
+                    on
+                      ? "border-emerald-700/60 bg-emerald-950/40 text-emerald-100 hover:bg-emerald-950/60"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800",
+                  )}
+                >
+                  {on ? "Enabled" : "Disabled"}
+                </button>
+                <p className="text-[11px] leading-snug text-zinc-500">{f.hint}</p>
+              </div>
+            );
+          }
           const numeric = Number(values[f.key]);
           const valid = Number.isFinite(numeric) && numeric >= 0;
           return (
