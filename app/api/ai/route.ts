@@ -39,6 +39,26 @@ Every percentage-style field in the context payload is stored as a DECIMAL FRACT
 
 Prices are also fractions of $1: kalshi_yes_ask = 0.880 means $0.88 per contract.
 
+## Resolving the actual bet (CRITICAL — DO NOT GUESS)
+
+Each Kalshi market is "Did [specific team or outcome] hit?" — YES/NO are which side of THAT contract you'd buy. To translate a signal into a concrete bet ("buy Lakers ML at $0.38"), use these PRE-RESOLVED fields when present:
+
+- **bet**: A complete plain-English bet description (e.g. "Lakers ML", "Over 6.5", "Tampa Bay -1.5"). Use this verbatim — DO NOT re-derive from market_type + market_side + side + line.
+- **action**: The exact instruction to give the user (e.g. "Buy YES on Kalshi at $0.380"). Quote this verbatim in your "How to place the bet" section.
+
+If those fields are missing, fall back to the raw mapping:
+- moneyline + market_side='home' + side='yes' → bet HOME team to win
+- moneyline + market_side='home' + side='no' → bet AWAY team to win (NO on the home market = home loses)
+- moneyline + market_side='away' + side='yes' → bet AWAY team to win
+- moneyline + market_side='away' + side='no' → bet HOME team to win
+- total + side='yes' → bet OVER the line (Kalshi totals are always YES = Over)
+- total + side='no' → bet UNDER the line
+- spread/puckline + market_side='home' + side='yes' → home covers their stored line
+- spread/puckline + market_side='home' + side='no' → away covers (line flips sign)
+- spread/puckline + market_side='away' + side='yes' → away covers (away's actual line is opposite of stored home-perspective line)
+
+NEVER tell the user "buy ML YES" without naming the actual team. NEVER tell them "buy TOTAL 6.5 NO" without naming Over or Under.
+
 ## Column glossary (every single-signal explanation should use these)
 
 - **kalshi_yes_ask** (fraction of $1; e.g. 0.600 = $0.60): what you'd pay on Kalshi to buy a YES contract right now. Settles to $1 if YES happens, $0 otherwise. NO ask = $1 − YES bid (mirror).
@@ -68,7 +88,7 @@ Be direct, terse, analytical. Don't pad. Don't moralize about gambling — the u
 
 const SINGLE_SIGNAL_SEED_HINT = `When asked to explain a signal, structure the answer like this:
 
-**1. What this contract is** — 1 sentence in plain English about what's being bet.
+**1. What this contract is** — 1 sentence in plain English using the resolved \`bet\` field (e.g. "This bets that the Lakers win their game against the Rockets" — NOT "ML YES" or "MONEYLINE YES"). Always name the specific team / over-under / spread side.
 
 **2. Column-by-column read of the signal row.** Walk through each number with its meaning AND the actual value from this signal. REMEMBER: percentage and probability fields in the payload are decimal fractions — multiply by 100 when displaying.
    - Kalshi YES ask: $X (where X = kalshi_yes_ask × 1, since it's already in dollars 0–1) — meaning ...
@@ -81,7 +101,7 @@ const SINGLE_SIGNAL_SEED_HINT = `When asked to explain a signal, structure the a
 
 **3. Why this looks like an edge.** 1–2 sentences tying the prices together. If the contract is cheap (price < $0.20 or > $0.80) and the edge percentage is large (>10%), explicitly call out the small-denominator amplification effect — a 7-pp absolute probability gap on a $0.12 contract becomes a 50%+ ROI on stake.
 
-**4. How to place the bet.** "Buy YES at $X" or "Buy NO at $Y" on Kalshi. Use the side suggested by the signal. For NO bets, NO_ask ≈ 1 − kalshi_yes_ask; explain the mirror price.
+**4. How to place the bet.** Use the resolved \`bet\` and \`action\` fields from the payload verbatim. Format: "On Kalshi, buy YES on '[bet description]' at $X" or "buy NO on the [opposing-side market] at $Y". The user must know WHICH team/outcome they're betting on, not just YES/NO.
 
 **5. Risks.** Highlight any ⚠ flags, low depth (<$50), few books (<3), Kalshi staleness (>10 min), or unusual market lines (e.g. NHL Total below 5 — likely a niche line). Be honest about whether this is a real opportunity or a data-quality artifact.
 

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SortHeader } from "@/components/ui/sort-header";
-import { ago, num, pct, teamLabel } from "@/lib/format";
+import { ago, num, pct, resolveBet, teamLabel } from "@/lib/format";
 import {
   fetchActiveSports,
   fetchRecentSignals,
@@ -41,16 +41,11 @@ function matchupLabel(s: SignalRow): string {
 }
 
 function marketChip(s: SignalRow) {
-  if (s.market_type === "moneyline") {
-    return (
-      <Badge variant={s.side === "yes" ? "info" : "muted"} mono>
-        ML {s.side.toUpperCase()}
-      </Badge>
-    );
-  }
+  const bet = resolveBet(s);
+  const variant = s.market_type === "moneyline" ? "info" : "muted";
   return (
-    <Badge variant="muted" mono>
-      {s.market_type.toUpperCase()} {s.line ?? ""} {s.side.toUpperCase()}
+    <Badge variant={variant} mono>
+      {bet}
     </Badge>
   );
 }
@@ -454,14 +449,20 @@ export default async function SignalsPage({
                     variant="icon"
                     context={{
                       type: "single_signal",
-                      title: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)} · ${s.market_type.toUpperCase()}${s.line != null ? ` ${s.line}` : ""} ${s.side.toUpperCase()}`,
+                      title: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)} · ${resolveBet(s)}`,
                       payload: {
                         id: s.id,
                         ticker: s.ticker,
                         matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
                         market_type: s.market_type,
+                        market_side: s.market_side,
                         line: s.line,
                         side: s.side,
+                        // Pre-resolved bet so the AI doesn't have to derive
+                        // it from market_side + side and risk getting the
+                        // home/away mapping wrong.
+                        bet: resolveBet(s),
+                        action: `Buy ${s.side.toUpperCase()} on Kalshi at $${(s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask).toFixed(3)}`,
                         kalshi_yes_ask: s.kalshi_yes_ask,
                         kalshi_no_ask: s.kalshi_no_ask,
                         fair_yes_prob: s.fair_yes_prob,
@@ -474,6 +475,8 @@ export default async function SignalsPage({
                         clv_pct: s.clv_pct,
                         detected_at: s.detected_at,
                         start_time: s.start_time,
+                        home_team: s.home_team,
+                        away_team: s.away_team,
                       },
                       seedPrompt:
                         "Walk me through this signal column-by-column. Explain what each number on the row means AND the specific value here, why this is flagged as +EV, exactly how to place the bet on Kalshi, and the biggest risks.",

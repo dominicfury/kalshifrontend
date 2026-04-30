@@ -8,7 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DataTable, TBody, Td, THead, Th, Tr } from "@/components/ui/data-table";
 import { PageHeader, Section } from "@/components/ui/section";
 import { Stat } from "@/components/ui/stat";
-import { ago, num, pct, teamLabel } from "@/lib/format";
+import { ago, num, pct, resolveBet, teamLabel } from "@/lib/format";
 import { fetchSignalDetail } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,8 @@ export default async function SignalDetailPage({
   const s = detail.signal;
   const matchup = `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`;
   const sideTone = s.side === "yes" ? "info" : "muted";
+  const bet = resolveBet(s);
+  const action = `Buy ${s.side.toUpperCase()} on Kalshi at $${(s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask).toFixed(3)}`;
 
   return (
     <>
@@ -46,8 +48,7 @@ export default async function SignalDetailPage({
           <span className="inline-flex items-center gap-3">
             {matchup}
             <Badge variant={sideTone} mono>
-              {s.market_type.toUpperCase()}
-              {s.line != null ? ` ${s.line}` : ""} {s.side.toUpperCase()}
+              {bet}
             </Badge>
           </span>
         }
@@ -58,15 +59,20 @@ export default async function SignalDetailPage({
               variant="button"
               context={{
                 type: "single_signal",
-                title: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)} · ${s.market_type.toUpperCase()}${s.line != null ? ` ${s.line}` : ""} ${s.side.toUpperCase()}`,
+                title: `${matchup} · ${bet}`,
                 payload: {
                   id: s.id,
                   ticker: s.ticker,
                   raw_title: s.raw_title,
-                  matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
+                  matchup,
                   market_type: s.market_type,
+                  market_side: s.market_side,
                   line: s.line,
                   side: s.side,
+                  bet,
+                  action,
+                  home_team: s.home_team,
+                  away_team: s.away_team,
                   kalshi_yes_ask: s.kalshi_yes_ask,
                   kalshi_no_ask: s.kalshi_no_ask,
                   fair_yes_prob: s.fair_yes_prob,

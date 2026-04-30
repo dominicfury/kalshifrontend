@@ -27,6 +27,12 @@ export interface SignalRow {
   period: string;
   line: number | null;
   raw_title: string;
+  // The Kalshi market's perspective: which team / outcome the YES side
+  // is asking about. Combined with `side` (yes/no), this resolves to
+  // the actual team or outcome being bet on.
+  //   moneyline / spread: 'home' or 'away' (which team the contract is for)
+  //   total: 'over' or 'under' (always 'over' in our normalizer for Kalshi totals)
+  market_side: "home" | "away" | "over" | "under" | null;
   home_team: string;
   away_team: string;
   start_time: string;
@@ -156,7 +162,7 @@ export async function fetchRecentSignals(
                s.match_confidence, s.alert_sent, s.n_books_used,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl,
-               km.ticker, km.market_type, km.period, km.line, km.raw_title,
+               km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
                e.home_team, e.away_team, e.start_time, e.sport
         FROM signals s
         JOIN kalshi_markets km ON s.kalshi_market_id = km.id
@@ -181,7 +187,7 @@ export async function fetchRecentSignals(
                s.match_confidence, s.alert_sent, s.n_books_used,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl,
-               km.ticker, km.market_type, km.period, km.line, km.raw_title,
+               km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
                e.home_team, e.away_team, e.start_time, e.sport
         FROM ranked s
         JOIN kalshi_markets km ON s.kalshi_market_id = km.id
