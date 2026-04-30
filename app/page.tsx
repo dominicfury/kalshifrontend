@@ -99,6 +99,47 @@ function formatInterval(sec: number): string {
 }
 
 
+function formatTimeToStart(min: number | null): string {
+  if (min == null) return "—";
+  if (min < -1) return "live";
+  if (min <= 0) return "now";
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h < 24) return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  return remH === 0 ? `${d}d` : `${d}d ${remH}h`;
+}
+
+
+function timeToStartCell(min: number | null) {
+  if (min == null) return <span className="text-zinc-400">—</span>;
+  // Color by proximity: started/live = rose, <30m = amber, <2h = emerald,
+  // anything farther out is plain zinc.
+  let tone = "text-zinc-200";
+  if (min < 0) tone = "text-rose-300";
+  else if (min < 30) tone = "text-amber-300 font-semibold";
+  else if (min < 120) tone = "text-emerald-300";
+  return (
+    <span className={`font-mono tabular-nums ${tone}`}>{formatTimeToStart(min)}</span>
+  );
+}
+
+
+// Treat a signal as "fresh" if detected within the last 5 minutes of
+// server-render time. AutoRefresh re-renders the page every 60s so the
+// badge naturally clears as rows age out.
+function isFreshSignal(detectedAt: string): boolean {
+  const iso = detectedAt.endsWith("Z") || detectedAt.includes("+")
+    ? detectedAt
+    : `${detectedAt}Z`;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t < 5 * 60_000;
+}
+
+
 function parseFilters(sp: Record<string, string | string[] | undefined>): SignalFilters {
   const get = (k: string) => {
     const v = sp[k];
@@ -118,6 +159,7 @@ function parseFilters(sp: Record<string, string | string[] | undefined>): Signal
 
 
 const VALID_SORT_KEYS: SignalSortKey[] = [
+  "start_time",
   "detected_at",
   "edge",
   "edge_at_size",
@@ -130,6 +172,16 @@ const VALID_SORT_KEYS: SignalSortKey[] = [
 ];
 
 
+// "What's tipping off soonest" is the most actionable view for a +EV
+// trader — you want to act on the signal before the line steams or the
+// game starts. Sort by game start ascending; same game's signals
+// naturally cluster (they share a start_time).
+const DEFAULT_SORT: { key: SignalSortKey; dir: "asc" | "desc" } = {
+  key: "start_time",
+  dir: "asc",
+};
+
+
 function parseSort(sp: Record<string, string | string[] | undefined>): {
   key: SignalSortKey;
   dir: "asc" | "desc";
@@ -138,9 +190,17 @@ function parseSort(sp: Record<string, string | string[] | undefined>): {
     const v = sp[k];
     return Array.isArray(v) ? v[0] : v;
   };
-  const rawKey = (get("sort") || "detected_at") as SignalSortKey;
-  const key: SignalSortKey = VALID_SORT_KEYS.includes(rawKey) ? rawKey : "detected_at";
-  const dir: "asc" | "desc" = get("dir") === "asc" ? "asc" : "desc";
+  const rawKey = get("sort") as SignalSortKey | undefined;
+  if (!rawKey) return { ...DEFAULT_SORT };
+  const key: SignalSortKey = VALID_SORT_KEYS.includes(rawKey)
+    ? rawKey
+    : DEFAULT_SORT.key;
+  // For start_time we default to ascending (soonest first); other keys
+  // default to descending (biggest edge first, freshest first, etc).
+  const naturalDir: "asc" | "desc" = key === "start_time" ? "asc" : "desc";
+  const explicit = get("dir");
+  const dir: "asc" | "desc" =
+    explicit === "asc" ? "asc" : explicit === "desc" ? "desc" : naturalDir;
   return { key, dir };
 }
 
@@ -157,9 +217,10 @@ function buildSortHref(
   }
   if (filters.alertedOnly) params.set("alerted", "1");
   if (filters.unresolvedOnly) params.set("unresolved", "1");
-  if (next.key !== "detected_at" || next.dir !== "desc") {
+  if (next.key !== DEFAULT_SORT.key || next.dir !== DEFAULT_SORT.dir) {
     params.set("sort", next.key);
-    if (next.dir !== "desc") params.set("dir", next.dir);
+    const naturalDir = next.key === "start_time" ? "asc" : "desc";
+    if (next.dir !== naturalDir) params.set("dir", next.dir);
   }
   if (filters.sport) params.set("sport", filters.sport);
   const qs = params.toString();
@@ -274,6 +335,16 @@ export default async function SignalsPage({
                   href={sortHref}
                 />
               </Th>
+              <Th>
+                <SortHeader
+                  label="Game in"
+                  sortKey="start_time"
+                  active={sort.key === "start_time"}
+                  dir={sort.dir}
+                  href={sortHref}
+                  naturalDir="asc"
+                />
+              </Th>
               <Th>Sport</Th>
               <Th>Matchup</Th>
               <Th>Market</Th>
@@ -369,7 +440,7 @@ export default async function SignalsPage({
             </Tr>
           </THead>
           <TBody>
-            {signals.map((s) => {
+            {signals.map((s, idx) => {
               // Visual flag for rows that need extra investigation:
               //   - rose tint: Kalshi market hasn't moved in >10 min (stale book →
               //     consensus is moving on info, Kalshi isn't, edge is a trap)
@@ -385,6 +456,19 @@ export default async function SignalsPage({
                 : isHugeEdge
                   ? "bg-amber-950/20"
                   : "";
+              // Group consecutive rows with the same matchup: only the first
+              // row in a group renders the sport+matchup cells fully; the
+              // rest dim them so the eye reads multiple signals on the same
+              // game as a single block. Most natural under the default
+              // start_time sort (same game shares start time so signals
+              // cluster), but useful under any sort.
+              const prev = idx > 0 ? signals[idx - 1] : null;
+              const sameMatchupAsPrev =
+                prev != null &&
+                prev.home_team === s.home_team &&
+                prev.away_team === s.away_team &&
+                prev.start_time === s.start_time;
+              const fresh = isFreshSignal(s.detected_at);
               return (
               <Tr key={s.id} className={rowTone}>
                 <Td muted>
@@ -393,21 +477,35 @@ export default async function SignalsPage({
                     className="inline-flex items-center gap-1 hover:text-zinc-200"
                   >
                     {ago(s.detected_at)}
+                    {fresh && (
+                      <span className="ml-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300 ring-1 ring-emerald-500/40">
+                        NEW
+                      </span>
+                    )}
                     <ExternalLink className="size-3 opacity-40" />
                   </Link>
                 </Td>
+                <Td>{timeToStartCell(s.time_to_start_min)}</Td>
                 <Td>
-                  <Badge variant="muted" mono>
-                    {s.sport.toUpperCase()}
-                  </Badge>
+                  {sameMatchupAsPrev ? (
+                    <span className="text-zinc-700">↳</span>
+                  ) : (
+                    <Badge variant="muted" mono>
+                      {s.sport.toUpperCase()}
+                    </Badge>
+                  )}
                 </Td>
                 <Td>
-                  <Link
-                    href={`/signals/${s.id}`}
-                    className="hover:text-zinc-50"
-                  >
-                    {matchupLabel(s)}
-                  </Link>
+                  {sameMatchupAsPrev ? (
+                    <span className="text-zinc-700">″</span>
+                  ) : (
+                    <Link
+                      href={`/signals/${s.id}`}
+                      className="hover:text-zinc-50"
+                    >
+                      {matchupLabel(s)}
+                    </Link>
+                  )}
                 </Td>
                 <Td>{marketChip(s)}</Td>
                 <Td align="right" mono>{num(s.kalshi_yes_ask, 3)}</Td>

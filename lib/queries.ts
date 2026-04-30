@@ -37,6 +37,10 @@ export interface SignalRow {
   away_team: string;
   start_time: string;
   sport: string;
+  // Minutes from now to event start — computed server-side so it stays
+  // consistent with whatever clock the SQL filters use. Negative means
+  // already started (only visible via ?all=1 + 12h cutoff).
+  time_to_start_min: number;
 }
 
 export interface SignalFilters {
@@ -50,6 +54,7 @@ export interface SignalFilters {
 
 
 export type SignalSortKey =
+  | "start_time"
   | "detected_at"
   | "edge"
   | "edge_at_size"
@@ -61,6 +66,7 @@ export type SignalSortKey =
   | "clv";
 
 const SORT_SQL: Record<SignalSortKey, string> = {
+  start_time: "e.start_time",
   detected_at: "s.detected_at",
   edge: "s.edge_pct_after_fees",
   edge_at_size: "COALESCE(s.edge_pct_after_fees_at_size, s.edge_pct_after_fees)",
@@ -168,7 +174,8 @@ export async function fetchRecentSignals(
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
-               e.home_team, e.away_team, e.start_time, e.sport
+               e.home_team, e.away_team, e.start_time, e.sport,
+               CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min
         FROM signals s
         JOIN kalshi_markets km ON s.kalshi_market_id = km.id
         JOIN events e ON km.event_id = e.id
@@ -193,7 +200,8 @@ export async function fetchRecentSignals(
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
-               e.home_team, e.away_team, e.start_time, e.sport
+               e.home_team, e.away_team, e.start_time, e.sport,
+               CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min
         FROM ranked s
         JOIN kalshi_markets km ON s.kalshi_market_id = km.id
         JOIN events e ON km.event_id = e.id
@@ -374,8 +382,9 @@ export async function fetchSignalDetail(id: number): Promise<SignalDetail | null
              s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
              s.hypothetical_pnl,
              km.id AS kalshi_market_id,
-             km.ticker, km.market_type, km.period, km.line, km.raw_title,
-             e.id AS event_id, e.home_team, e.away_team, e.start_time, e.sport
+             km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
+             e.id AS event_id, e.home_team, e.away_team, e.start_time, e.sport,
+             CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min
       FROM signals s
       JOIN kalshi_markets km ON s.kalshi_market_id = km.id
       JOIN events e ON km.event_id = e.id

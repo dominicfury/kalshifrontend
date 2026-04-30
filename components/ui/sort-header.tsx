@@ -11,6 +11,11 @@ interface SortHeaderProps<K extends string> {
   dir: "asc" | "desc";
   href: (sortKey: K, nextDir: "asc" | "desc") => string;
   align?: "left" | "right";
+  // Default direction the first click on this column should produce.
+  // Most numeric/time columns want "biggest/newest first" (desc); a few
+  // (e.g. "Game in" — sort by event start ascending so the soonest game
+  // is on top) want "smallest first" (asc). Defaults to desc.
+  naturalDir?: "asc" | "desc";
 }
 
 export function SortHeader<K extends string>({
@@ -20,8 +25,10 @@ export function SortHeader<K extends string>({
   dir,
   href,
   align = "left",
+  naturalDir = "desc",
 }: SortHeaderProps<K>) {
-  const nextDir: "asc" | "desc" = active && dir === "desc" ? "asc" : "desc";
+  const opposite: "asc" | "desc" = naturalDir === "desc" ? "asc" : "desc";
+  const nextDir: "asc" | "desc" = active && dir === naturalDir ? opposite : naturalDir;
   return (
     <Link
       href={href(sortKey, nextDir)}
