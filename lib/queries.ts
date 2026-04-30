@@ -45,6 +45,12 @@ export interface SignalRow {
   // consistent with whatever clock the SQL filters use. Negative means
   // already started (only visible via ?all=1 + 12h cutoff).
   time_to_start_min: number;
+  // Latest Kalshi quote freshness for this market — joined from
+  // kalshi_quotes at query time, NOT a snapshot from detection. The
+  // Live view uses this to answer "is the market still being polled
+  // RIGHT NOW?" instead of trusting detected_at as a proxy.
+  live_polled_at: string | null;
+  live_quote_age_sec: number | null;
 }
 
 export interface SignalFilters {
@@ -58,6 +64,7 @@ export interface SignalFilters {
 
 
 export type SignalSortKey =
+  | "best"
   | "start_time"
   | "detected_at"
   | "edge"
@@ -70,6 +77,11 @@ export type SignalSortKey =
   | "clv";
 
 const SORT_SQL: Record<SignalSortKey, string> = {
+  // "Best" is the default — bucket by game proximity (live/imminent vs
+  // soon vs later) primary, biggest edge first within each bucket. Lets
+  // the user scan by "what's both about to start AND mispriced."
+  // Implemented as a multi-column ORDER BY in the assembly below.
+  best: "__best__",
   start_time: "e.start_time",
   detected_at: "s.detected_at",
   edge: "s.edge_pct_after_fees",
@@ -130,28 +142,28 @@ export async function fetchRecentSignals(
       "JOIN events e ON e.id = km.event_id " +
       "WHERE e.start_time > datetime('now', '-12 hours'))",
   );
-  // Default ("best info") view — only show signals that are:
+  // Default ("Live") view — show what's actionable RIGHT NOW. Filters:
   //   1. PRE-GAME: event hasn't started yet (you can't bet a game in progress)
-  //   2. NOT CLOSED: closing line not yet recorded (signal is still live)
+  //   2. NOT CLOSED: closing line not yet recorded
   //   3. NOT HUGE: edge < 5% (huge edges are almost always data bugs per spec §2)
   //   4. AT-SIZE PASS: edge_at_size also ≥ 0.5% (fillable, not phantom edge)
   //   5. FILLABLE: depth on the +EV side ≥ $25 (spec §10 thin-book rule).
-  //      yes_book_depth column stores the side-relevant depth as of v2 —
-  //      YES book depth on yes-side rows, NO book depth on no-side rows.
-  //   6. MULTI-BOOK CONSENSUS: ≥ 2 books in the devig (single-book "consensus"
-  //      is just one bookmaker's opinion — high uncertainty bars on fair value).
-  //   7. RECENT DETECTION: row inserted within the last 15 min. Backend
-  //      generate_signals.py heartbeats a fresh row every 10 min on persistent
-  //      edges, so anything older than 15 min means the opportunity collapsed,
-  //      polling stopped, or the scheduler is sick — not actionable.
+  //      yes_book_depth column stores side-relevant depth as of v2.
+  //   6. MULTI-BOOK CONSENSUS: ≥ 2 books in the devig.
+  //   7. ACTIVELY POLLED: latest kalshi_quote.polled_at within the last
+  //      3 minutes. This replaces the old detected_at-based recency cap.
+  //      detected_at was a PROXY for "is the market still being polled,"
+  //      and the proxy broke whenever signal generation skipped a market
+  //      (filter A reject, COLD sport, etc.). Joining the live quote
+  //      table answers the question directly — if Kalshi is being polled
+  //      for this market, the signal is current.
   //
   // We deliberately do NOT filter on:
-  //   - kalshi_staleness_sec: generate_signals already rejects on >600s,
-  //     so all stored signals satisfy this. Re-applying it here is dead code.
-  //   - book_staleness_sec: it measures "time since the consensus PRICE MOVED."
-  //     With a 30-min book poll cadence a healthy book that didn't move at the
-  //     last poll routinely shows 1800–3600s of staleness, which is fine. The
-  //     dangerous case is stale-Kalshi (already filtered at generation).
+  //   - kalshi_staleness_sec: generate_signals already rejects via the
+  //     relative-staleness rule, so all stored signals satisfy this.
+  //   - book_staleness_sec: measures "time since the consensus PRICE
+  //     MOVED." With a 30-min book poll cadence a healthy quiet book
+  //     routinely sits at 1800–3600s, which is fine.
   //
   // Visible via ?all=1 for full audit trail / CLV bucket review.
   if (!filters.showAll) {
@@ -160,7 +172,7 @@ export async function fetchRecentSignals(
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
     where.push("s.yes_book_depth >= 25");
     where.push("s.n_books_used >= 2");
-    where.push("s.detected_at >= datetime('now', '-15 minutes')");
+    where.push("lq.polled_at >= datetime('now', '-3 minutes')");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
         "JOIN events e ON e.id = km.event_id " +
@@ -169,8 +181,22 @@ export async function fetchRecentSignals(
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const sortColumn = SORT_SQL[sort.key];
-  const sortDir = sort.dir.toUpperCase() === "ASC" ? "ASC" : "DESC";
+
+  // The live-quote subquery: latest kalshi_quotes.polled_at per market.
+  // Joined as `lq` so every signal row gets the current freshness of its
+  // underlying Kalshi market, not the stale snapshot from detection time.
+  // The (market_id, polled_at DESC) index makes the GROUP BY cheap.
+  const LIVE_QUOTE_JOIN = `
+    LEFT JOIN (
+      SELECT market_id, MAX(polled_at) AS polled_at
+      FROM kalshi_quotes
+      GROUP BY market_id
+    ) lq ON lq.market_id = s.kalshi_market_id
+  `;
+  const LIVE_QUOTE_SELECT = `
+    lq.polled_at AS live_polled_at,
+    CAST((julianday('now') - julianday(lq.polled_at)) * 86400 AS INTEGER) AS live_quote_age_sec
+  `;
 
   // Default: collapse to one row per (market_id, side) — the most recent
   // detection — so the ledger reads as "current open opportunities" instead
@@ -188,10 +214,12 @@ export async function fetchRecentSignals(
                s.hypothetical_pnl,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
                e.home_team, e.away_team, e.start_time, e.sport,
-               CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min
+               CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min,
+               ${LIVE_QUOTE_SELECT}
         FROM signals s
         JOIN kalshi_markets km ON s.kalshi_market_id = km.id
         JOIN events e ON km.event_id = e.id
+        ${LIVE_QUOTE_JOIN}
         ${whereSql}
       `
     : `
@@ -202,7 +230,8 @@ export async function fetchRecentSignals(
                    ORDER BY s.detected_at DESC
                  ) AS rn
           FROM signals s
-          ${whereSql.replace(/s\./g, "s.")}
+          ${LIVE_QUOTE_JOIN}
+          ${whereSql}
         )
         SELECT s.id, s.detected_at,
                s.kalshi_yes_ask, s.kalshi_no_ask, s.fair_yes_prob,
@@ -214,22 +243,117 @@ export async function fetchRecentSignals(
                s.hypothetical_pnl,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
                e.home_team, e.away_team, e.start_time, e.sport,
-               CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min
+               CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min,
+               ${LIVE_QUOTE_SELECT}
         FROM ranked s
         JOIN kalshi_markets km ON s.kalshi_market_id = km.id
         JOIN events e ON km.event_id = e.id
+        ${LIVE_QUOTE_JOIN}
         WHERE s.rn = 1
       `;
+
+  // Hybrid "best" sort: bucket by game proximity (tipping off / soon /
+  // later), biggest edge first inside each bucket. Lets the user scan
+  // for "what's both about to start AND mispriced" without having to
+  // sort one column then squint at the other.
+  const PROXIMITY_BUCKET = `
+    CASE
+      WHEN (julianday(e.start_time) - julianday('now')) * 1440 < 120 THEN 0
+      WHEN (julianday(e.start_time) - julianday('now')) * 1440 < 1440 THEN 1
+      ELSE 2
+    END
+  `;
+
+  let orderBy: string;
+  if (sort.key === "best") {
+    orderBy = `${PROXIMITY_BUCKET} ASC, s.edge_pct_after_fees DESC, s.id DESC`;
+  } else {
+    const sortColumn = SORT_SQL[sort.key];
+    const sortDir = sort.dir.toUpperCase() === "ASC" ? "ASC" : "DESC";
+    orderBy = `${sortColumn} ${sortDir} NULLS LAST, s.id DESC`;
+  }
 
   args.push(limit);
   const result = await db.execute({
     sql: `${baseSql}
-      ORDER BY ${sortColumn} ${sortDir} NULLS LAST, s.id DESC
+      ORDER BY ${orderBy}
       LIMIT ?
     `,
     args,
   });
   return result.rows as unknown as SignalRow[];
+}
+
+
+/** Quick counts for the empty state — shows the user what's actually
+ * happening right now even when the Live filter returns zero rows. */
+export interface LiveStats {
+  active_markets: number;       // pre-game markets being polled in last 3m
+  signals_total: number;        // any +EV detection in the last 15m
+  signals_live: number;         // detections matching the Live default filter
+  next_event_min: number | null;
+  next_event_sport: string | null;
+}
+
+export async function fetchLiveStats(): Promise<LiveStats> {
+  const db = getDb();
+  const r = await db.execute(`
+    WITH lq AS (
+      SELECT market_id, MAX(polled_at) AS polled_at
+      FROM kalshi_quotes
+      GROUP BY market_id
+    ),
+    pregame_active AS (
+      SELECT km.id
+      FROM kalshi_markets km
+      JOIN events e ON e.id = km.event_id
+      JOIN lq ON lq.market_id = km.id
+      WHERE e.start_time > datetime('now')
+        AND lq.polled_at >= datetime('now', '-3 minutes')
+        AND km.status = 'active'
+    ),
+    recent_signals AS (
+      SELECT s.id, s.kalshi_market_id, s.side,
+             s.edge_pct_after_fees, s.edge_pct_after_fees_at_size,
+             s.yes_book_depth, s.n_books_used, s.closing_kalshi_yes_price,
+             ROW_NUMBER() OVER (
+               PARTITION BY s.kalshi_market_id, s.side
+               ORDER BY s.detected_at DESC
+             ) AS rn
+      FROM signals s
+      WHERE s.detected_at >= datetime('now', '-15 minutes')
+    ),
+    next_event AS (
+      SELECT sport,
+             CAST((julianday(start_time) - julianday('now')) * 1440 AS INTEGER) AS min_to_start
+      FROM events
+      WHERE start_time > datetime('now')
+      ORDER BY start_time ASC
+      LIMIT 1
+    )
+    SELECT
+      (SELECT COUNT(*) FROM pregame_active) AS active_markets,
+      (SELECT COUNT(*) FROM recent_signals WHERE rn = 1) AS signals_total,
+      (SELECT COUNT(*) FROM recent_signals rs
+        WHERE rs.rn = 1
+          AND rs.closing_kalshi_yes_price IS NULL
+          AND rs.edge_pct_after_fees < 0.05
+          AND rs.edge_pct_after_fees_at_size >= 0.005
+          AND rs.yes_book_depth >= 25
+          AND rs.n_books_used >= 2
+          AND rs.kalshi_market_id IN (SELECT id FROM pregame_active)
+      ) AS signals_live,
+      (SELECT min_to_start FROM next_event) AS next_event_min,
+      (SELECT sport FROM next_event) AS next_event_sport
+  `);
+  const row = r.rows[0] as unknown as Record<string, unknown>;
+  return {
+    active_markets: Number(row.active_markets) || 0,
+    signals_total: Number(row.signals_total) || 0,
+    signals_live: Number(row.signals_live) || 0,
+    next_event_min: row.next_event_min == null ? null : Number(row.next_event_min),
+    next_event_sport: row.next_event_sport == null ? null : String(row.next_event_sport),
+  };
 }
 
 export interface ClvOverall {
@@ -398,10 +522,17 @@ export async function fetchSignalDetail(id: number): Promise<SignalDetail | null
              km.id AS kalshi_market_id,
              km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
              e.id AS event_id, e.home_team, e.away_team, e.start_time, e.sport,
-             CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min
+             CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min,
+             lq.polled_at AS live_polled_at,
+             CAST((julianday('now') - julianday(lq.polled_at)) * 86400 AS INTEGER) AS live_quote_age_sec
       FROM signals s
       JOIN kalshi_markets km ON s.kalshi_market_id = km.id
       JOIN events e ON km.event_id = e.id
+      LEFT JOIN (
+        SELECT market_id, MAX(polled_at) AS polled_at
+        FROM kalshi_quotes
+        GROUP BY market_id
+      ) lq ON lq.market_id = s.kalshi_market_id
       WHERE s.id = ?
     `,
     args: [id],
