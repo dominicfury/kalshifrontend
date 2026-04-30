@@ -13,6 +13,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: "/", label: "Signals" },
+  { href: "/alerts", label: "Alerts" },
   { href: "/clv", label: "CLV", adminOnly: true },
   { href: "/health", label: "Health", adminOnly: true },
   { href: "/settings", label: "Settings", adminOnly: true },

@@ -53,11 +53,30 @@ export async function POST(req: Request) {
 
   const ok = await verifyPassword(password, user.password_hash);
   if (!ok) {
-    await logActivity({ user_id: user.id, action: "login_failed", ip, user_agent: ua });
+    try {
+      await logActivity({ user_id: user.id, action: "login_failed", ip, user_agent: ua });
+    } catch (e) {
+      console.error("login: logActivity(failed) error:", e);
+    }
     return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
   }
 
-  const token = await signToken({ sub: user.id, username: user.username, role: user.role });
+  let token: string;
+  try {
+    token = await signToken({ sub: user.id, username: user.username, role: user.role });
+  } catch (e) {
+    // Most likely: JWT_SECRET missing or shorter than 16 chars on Vercel.
+    return NextResponse.json(
+      {
+        error:
+          "auth_token signing failed — check JWT_SECRET env var on Vercel " +
+          "(must be ≥16 chars; generate with `openssl rand -base64 64`)",
+        detail: e instanceof Error ? e.message : String(e),
+      },
+      { status: 500 },
+    );
+  }
+
   const c = await cookies();
   c.set(AUTH_COOKIE, token, {
     httpOnly: true,
@@ -67,8 +86,18 @@ export async function POST(req: Request) {
     maxAge: AUTH_COOKIE_MAX_AGE,
   });
 
-  await recordLogin(user.id);
-  await logActivity({ user_id: user.id, action: "login", ip, user_agent: ua });
+  // Best-effort post-login bookkeeping. The cookie is already set above —
+  // a libsql blip on these UPDATE/INSERT calls must not crash the login.
+  try {
+    await recordLogin(user.id);
+  } catch (e) {
+    console.error("login: recordLogin failed:", e);
+  }
+  try {
+    await logActivity({ user_id: user.id, action: "login", ip, user_agent: ua });
+  } catch (e) {
+    console.error("login: logActivity failed:", e);
+  }
 
   return NextResponse.json({
     ok: true,
