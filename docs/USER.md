@@ -75,6 +75,11 @@ The default list shows only signals that meet ALL of these:
 - **Depth ≥ $25** (per spec; thinner books are unfillable in any meaningful size)
 - **Latest detection per (market, side)** — duplicates collapsed
 
+Even with `?all=1`, signals whose underlying game started **more than
+12 hours ago** are hidden from the table. The rows stay in the DB so
+the admin's CLV tab and audit queries still see them; the live ledger
+just has no reason to display week-old closed signals.
+
 To see everything (huge edges, started games, closed signals — useful
 for CLV-bucket investigation), append `?all=1` to the URL.
 

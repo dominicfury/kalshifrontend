@@ -96,6 +96,15 @@ export async function fetchRecentSignals(
     );
     args.push(filters.sport);
   }
+  // Always: hide signals whose underlying game started > 12h ago, even
+  // in the ?all=1 view. The rows stay in the DB (the /clv tab queries
+  // run their own SQL and still see them), but the live ledger has no
+  // reason to display week-old closed signals.
+  where.push(
+    "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
+      "JOIN events e ON e.id = km.event_id " +
+      "WHERE e.start_time > datetime('now', '-12 hours'))",
+  );
   // Default ("best info") view — only show signals that are:
   //   1. PRE-GAME: event hasn't started yet (you can't bet a game in progress)
   //   2. NOT CLOSED: closing line not yet recorded (signal is still live)

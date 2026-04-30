@@ -275,6 +275,37 @@ export async function updateUser(
   return findUserById(id);
 }
 
+/** Hard-delete a user + all dependent rows (activity, alert subs, alert
+ * log). Useful for clearing out test accounts. The CLV pipeline keeps
+ * working because signals don't reference user_id. */
+export async function deleteUser(id: number): Promise<void> {
+  const db = getDb();
+  // Delete in FK-respecting order. SQLite enforces FKs only when the
+  // pragma is on; libsql does. We don't rely on cascade — explicit is
+  // simpler to reason about than schema-defined cascades that can
+  // surprise people later.
+  await db.execute({
+    sql: `DELETE FROM alert_log
+          WHERE subscription_id IN (
+            SELECT id FROM alert_subscriptions WHERE user_id = ?
+          )`,
+    args: [id],
+  });
+  await db.execute({
+    sql: `DELETE FROM alert_subscriptions WHERE user_id = ?`,
+    args: [id],
+  });
+  await db.execute({
+    sql: `DELETE FROM user_activity WHERE user_id = ?`,
+    args: [id],
+  });
+  await db.execute({
+    sql: `DELETE FROM users WHERE id = ?`,
+    args: [id],
+  });
+}
+
+
 export async function recordLogin(id: number): Promise<void> {
   const db = getDb();
   await db.execute({

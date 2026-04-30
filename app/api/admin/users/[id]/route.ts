@@ -3,11 +3,44 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/session";
 import {
   adminVerifyUser,
+  deleteUser,
   findUserById,
   updateUser,
 } from "@/lib/users";
 
 export const runtime = "nodejs";
+
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const admin = await requireAdmin();
+  if (!admin) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+  const { id } = await params;
+  const userId = Number(id);
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return NextResponse.json({ error: "invalid id" }, { status: 400 });
+  }
+
+  const target = await findUserById(userId);
+  if (!target) {
+    return NextResponse.json({ error: "user not found" }, { status: 404 });
+  }
+
+  // Refuse to delete the calling admin (same self-lockout protection
+  // as disable / demote).
+  if (target.id === admin.sub) {
+    return NextResponse.json(
+      { error: "cannot delete your own account from this session" },
+      { status: 400 },
+    );
+  }
+
+  await deleteUser(userId);
+  return NextResponse.json({ ok: true, deleted: userId });
+}
 
 export async function PATCH(
   req: Request,

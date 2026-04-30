@@ -292,20 +292,7 @@ export default async function SignalsPage({
       {!error && signals.length === 0 && (
         <EmptyState
           title="No signals yet"
-          description="Either polling hasn't started, or every active market is below the 0.5% edge threshold."
-          hint={
-            <>
-              From the backend project run{" "}
-              <code className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">
-                python -m scripts.poll_once
-              </code>{" "}
-              then{" "}
-              <code className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">
-                python -m scripts.generate_signals
-              </code>
-              .
-            </>
-          }
+          description="Every active market is below the 0.5% edge threshold — try again at a more active betting time."
         />
       )}
 

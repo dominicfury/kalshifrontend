@@ -6,6 +6,7 @@ import {
   Check,
   Loader2,
   ShieldQuestion,
+  Trash2,
   UserCog,
   UserPlus,
 } from "lucide-react";
@@ -66,6 +67,33 @@ export function UsersTable({ initial }: { initial: UserRow[] }) {
         return;
       }
       setUsers((u) => u.map((x) => (x.id === id ? data.user : x)));
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function destroy(u: UserRow) {
+    if (
+      !window.confirm(
+        `Permanently delete "${u.username}"? This removes the user, their alert subscriptions, and their activity log. The action cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBusyId(u.id);
+    setError(null);
+    try {
+      const r = await fetch(`/api/admin/users/${u.id}`, {
+        method: "DELETE",
+        cache: "no-store",
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        setError(data?.error || `HTTP ${r.status}`);
+        return;
+      }
+      setUsers((list) => list.filter((x) => x.id !== u.id));
       router.refresh();
     } finally {
       setBusyId(null);
@@ -221,6 +249,20 @@ export function UsersTable({ initial }: { initial: UserRow[] }) {
                           Enable
                         </button>
                       )}
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => destroy(u)}
+                        title="Permanently delete this user"
+                        className="inline-flex items-center gap-1 rounded-md border border-rose-900/60 bg-rose-950/30 px-2 py-1 text-[10px] font-semibold text-rose-200 hover:bg-rose-950/60 disabled:opacity-60"
+                      >
+                        {isBusy ? (
+                          <Loader2 className="size-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-3" />
+                        )}
+                        Delete
+                      </button>
                     </div>
                   </td>
                 </tr>
