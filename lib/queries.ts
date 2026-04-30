@@ -12,6 +12,10 @@ export interface SignalRow {
   edge_pct_after_fees: number;
   edge_pct_after_fees_at_size: number | null;
   expected_fill_price: number | null;
+  // Dollars available at the best ask on the +EV SIDE — YES book for
+  // yes-side signals, NO book for no-side signals. Field name is legacy
+  // (the column was originally YES-only); semantically it's "depth on
+  // the side you'd buy." Backend engine writes it correctly as of v2.
   yes_book_depth: number | null;
   kalshi_staleness_sec: number | null;
   book_staleness_sec: number | null;
@@ -130,37 +134,32 @@ export async function fetchRecentSignals(
   //   1. PRE-GAME: event hasn't started yet (you can't bet a game in progress)
   //   2. NOT CLOSED: closing line not yet recorded (signal is still live)
   //   3. NOT HUGE: edge < 5% (huge edges are almost always data bugs per spec §2)
-  //   4. NOT STALE (Kalshi side): ≤ 10 min since last Kalshi price move
-  //   5. AT-SIZE PASS: edge_at_size also ≥ 0.5% (catches legacy phantom rows)
-  //   6. FILLABLE: depth ≥ $25 OR depth IS NULL (per spec §10 thin-book rule)
-  //   7. MULTI-BOOK CONSENSUS: ≥ 2 books in the devig (single-book "consensus"
+  //   4. AT-SIZE PASS: edge_at_size also ≥ 0.5% (fillable, not phantom edge)
+  //   5. FILLABLE: depth on the +EV side ≥ $25 (spec §10 thin-book rule).
+  //      yes_book_depth column stores the side-relevant depth as of v2 —
+  //      YES book depth on yes-side rows, NO book depth on no-side rows.
+  //   6. MULTI-BOOK CONSENSUS: ≥ 2 books in the devig (single-book "consensus"
   //      is just one bookmaker's opinion — high uncertainty bars on fair value).
-  //      Spec §10 alert gate. We apply it to the view too because users
-  //      shouldn't see 1-book signals as actionable.
+  //   7. RECENT DETECTION: row inserted within the last 15 min. Backend
+  //      generate_signals.py heartbeats a fresh row every 10 min on persistent
+  //      edges, so anything older than 15 min means the opportunity collapsed,
+  //      polling stopped, or the scheduler is sick — not actionable.
   //
-  // We deliberately do NOT filter on book_staleness_sec at view time:
-  // book_staleness measures "time since the consensus PRICE MOVED" — with
-  // a 30-min book poll cadence, a healthy book that didn't move at the
-  // last poll routinely shows 1800–3600s of staleness, which is fine.
-  // Stale-Kalshi (filter #4) is the dangerous case the spec actually warns
-  // about (the trap where books moved on news but Kalshi didn't).
+  // We deliberately do NOT filter on:
+  //   - kalshi_staleness_sec: generate_signals already rejects on >600s,
+  //     so all stored signals satisfy this. Re-applying it here is dead code.
+  //   - book_staleness_sec: it measures "time since the consensus PRICE MOVED."
+  //     With a 30-min book poll cadence a healthy book that didn't move at the
+  //     last poll routinely shows 1800–3600s of staleness, which is fine. The
+  //     dangerous case is stale-Kalshi (already filtered at generation).
   //
   // Visible via ?all=1 for full audit trail / CLV bucket review.
   if (!filters.showAll) {
     where.push("s.closing_kalshi_yes_price IS NULL");
     where.push("s.edge_pct_after_fees < 0.05");
-    where.push(
-      "(s.edge_pct_after_fees_at_size IS NULL OR s.edge_pct_after_fees_at_size >= 0.005)",
-    );
-    where.push("(s.kalshi_staleness_sec IS NULL OR s.kalshi_staleness_sec <= 600)");
-    where.push("(s.yes_book_depth IS NULL OR s.yes_book_depth >= 25)");
+    where.push("s.edge_pct_after_fees_at_size >= 0.005");
+    where.push("s.yes_book_depth >= 25");
     where.push("s.n_books_used >= 2");
-    // Detection recency: signals older than 15 min are stale even if their
-    // stored kalshi_staleness_sec snapshot looks fresh. Generate_signals
-    // produces a new row every Kalshi poll (~30s) when an opportunity is
-    // live, so a row >15 min old means the opportunity has collapsed,
-    // polling stopped, or the scheduler is sick — none of which we want
-    // to surface as actionable.
     where.push("s.detected_at >= datetime('now', '-15 minutes')");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
