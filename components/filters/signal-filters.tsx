@@ -34,6 +34,36 @@ function Chip({ label, active, href, hint }: ChipProps) {
 }
 
 
+function SegmentChip({
+  label,
+  active,
+  href,
+  hint,
+}: {
+  label: string;
+  active: boolean;
+  href: string;
+  hint?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      role="radio"
+      aria-checked={active}
+      title={hint}
+      className={cn(
+        "px-3 py-1 text-xs font-semibold transition-colors",
+        active
+          ? "bg-orange-500 text-white"
+          : "bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-zinc-50",
+      )}
+    >
+      {label}
+    </Link>
+  );
+}
+
+
 function buildHref(current: SignalFilters, patch: Partial<SignalFilters>): string {
   const merged = { ...current, ...patch };
   const params = new URLSearchParams();
@@ -87,14 +117,30 @@ export function SignalFilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-300 mr-1">
-        filter
+      <span
+        className="text-[11px] uppercase tracking-[0.16em] text-zinc-300 mr-1"
+        title="Show only currently-bettable signals (default), or every detection ever logged including closed games and flagged anomalies"
+      >
+        show
       </span>
-      <Chip
-        label={filters.showAll ? "All detections" : "Latest only"}
-        active={!filters.showAll}
-        href={buildHref(filters, { showAll: !filters.showAll })}
-      />
+      <div
+        className="inline-flex overflow-hidden rounded-full border border-zinc-700"
+        role="radiogroup"
+        aria-label="View"
+      >
+        <SegmentChip
+          label="Live"
+          hint="Pre-game, fillable, edge under 5%"
+          active={!filters.showAll}
+          href={buildHref(filters, { showAll: false })}
+        />
+        <SegmentChip
+          label="All"
+          hint="Includes closed, started, flagged ≥5%, and signals from games up to 12h ago"
+          active={!!filters.showAll}
+          href={buildHref(filters, { showAll: true })}
+        />
+      </div>
       <span className="ml-2 text-zinc-500">·</span>
       <Chip
         label="Today"
