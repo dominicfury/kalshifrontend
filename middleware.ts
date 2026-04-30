@@ -9,6 +9,7 @@ const PUBLIC_PATHS = new Set<string>([
   "/",                           // landing for logged-out / dashboard for logged-in
   "/login",
   "/signup",
+  "/info",                       // educational reference — open to everyone
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/signup",

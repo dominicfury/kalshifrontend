@@ -96,16 +96,26 @@ export async function fetchRecentSignals(
     );
     args.push(filters.sport);
   }
-  // Default view hides "trap" signals: stale Kalshi books (price sat for
-  // >10 min, almost certainly drifting from current consensus), huge
-  // edges >5% (almost always settlement-rule mismatch or data bug per
-  // spec §2), and signals for games that already started — you can't
-  // bet on a game in progress anyway, and the CLV column would clutter
-  // the live ledger with closed/historical rows. Visible via ?all=1
-  // for investigation / CLV bucket review.
+  // Default ("best info") view — only show signals that are:
+  //   1. PRE-GAME: event hasn't started yet (you can't bet a game in progress)
+  //   2. NOT CLOSED: closing line not yet recorded (signal is still live)
+  //   3. NOT STALE: Kalshi market actively quoted (≤ 10 min since last move)
+  //   4. NOT HUGE: edge < 5% (huge edges are almost always data bugs per spec §2)
+  //   5. FRESH BOOKS: book staleness ≤ 300s (5 min — books moving recently)
+  //   6. FILLABLE: depth ≥ $25 OR depth IS NULL (per spec §10 thin-book rule)
+  //   7. AT-SIZE PASS: edge_at_size also ≥ 0.5% (already enforced at signal-gen,
+  //      duplicated here so legacy pre-fix rows also get filtered out)
+  //
+  // Visible via ?all=1 for full audit trail / CLV bucket review.
   if (!filters.showAll) {
-    where.push("(s.kalshi_staleness_sec IS NULL OR s.kalshi_staleness_sec <= 600)");
+    where.push("s.closing_kalshi_yes_price IS NULL");
     where.push("s.edge_pct_after_fees < 0.05");
+    where.push(
+      "(s.edge_pct_after_fees_at_size IS NULL OR s.edge_pct_after_fees_at_size >= 0.005)",
+    );
+    where.push("(s.kalshi_staleness_sec IS NULL OR s.kalshi_staleness_sec <= 600)");
+    where.push("(s.book_staleness_sec IS NULL OR s.book_staleness_sec <= 300)");
+    where.push("(s.yes_book_depth IS NULL OR s.yes_book_depth >= 25)");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
         "JOIN events e ON e.id = km.event_id " +
@@ -272,7 +282,9 @@ export async function fetchSportActivity(): Promise<SportActivity[]> {
   // Backfill the sports we support but have no upcoming events for so the
   // dashboard shows them as 'dark' rather than hiding them entirely (silence
   // tells you "off-season / off-day," not "we forgot about this sport").
-  const known = ["nhl", "nba", "mlb", "wnba", "tennis_atp", "tennis_wta"];
+  // Tennis is excluded — Odds API tennis keys are tournament-specific so
+  // we don't poll them, and showing a permanently-dark chip is just noise.
+  const known = ["nhl", "nba", "mlb", "wnba"];
   const seen = new Set(rows.map((r) => r.sport));
   for (const sport of known) {
     if (!seen.has(sport)) {
