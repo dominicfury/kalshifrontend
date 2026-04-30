@@ -253,11 +253,16 @@ export async function fetchRecentSignals(
       `;
 
   // Hybrid "best" sort: bucket by game proximity (tipping off / soon /
-  // later), biggest edge first inside each bucket. Lets the user scan
-  // for "what's both about to start AND mispriced" without having to
-  // sort one column then squint at the other.
+  // later / started-or-past), biggest edge first inside each bucket.
+  // Lets the user scan for "what's both about to start AND mispriced"
+  // without having to sort one column then squint at the other.
+  //
+  // Started/past games go to the LAST bucket so they don't pollute the
+  // top of ?all=1 — a CLOSED row from 11h ago shouldn't share a bucket
+  // with a market tipping off in 30 min.
   const PROXIMITY_BUCKET = `
     CASE
+      WHEN (julianday(e.start_time) - julianday('now')) * 1440 < 0 THEN 3
       WHEN (julianday(e.start_time) - julianday('now')) * 1440 < 120 THEN 0
       WHEN (julianday(e.start_time) - julianday('now')) * 1440 < 1440 THEN 1
       ELSE 2
