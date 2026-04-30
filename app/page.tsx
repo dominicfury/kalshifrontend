@@ -399,8 +399,8 @@ export default async function SignalsPage({
                   naturalDir="asc"
                 />
               </Th>
-              {/* Sport — hidden below md. */}
-              <Th className="hidden md:table-cell">Sport</Th>
+              {/* Sport — always shown. */}
+              <Th>Sport</Th>
               {/* Matchup — always shown but truncated on mobile. */}
               <Th>Matchup</Th>
               {/* Bet — the resolved description. Always shown. */}
@@ -416,8 +416,8 @@ export default async function SignalsPage({
                   align="right"
                 />
               </Th>
-              {/* Fair — hidden below sm. Sortable. */}
-              <Th align="right" className="hidden sm:table-cell">
+              {/* Fair — always shown. Sortable. */}
+              <Th align="right">
                 <SortHeader
                   label="Fair"
                   sortKey="fair"
@@ -438,10 +438,10 @@ export default async function SignalsPage({
                   align="right"
                 />
               </Th>
-              {/* Depth — hidden below md. */}
-              <Th align="right" className="hidden md:table-cell">Depth</Th>
-              {/* Books — hidden below md. Sortable. */}
-              <Th align="right" className="hidden md:table-cell">
+              {/* Depth — always shown. Disambiguates @$ omission for thin books. */}
+              <Th align="right">Depth</Th>
+              {/* Books — always shown. Sortable. */}
+              <Th align="right">
                 <SortHeader
                   label="Books"
                   sortKey="n_books"
@@ -535,7 +535,7 @@ export default async function SignalsPage({
                     </Link>
                   </Td>
                   <Td>{timeToStartCell(s.time_to_start_min)}</Td>
-                  <Td className="hidden md:table-cell">
+                  <Td>
                     <Badge variant="muted" mono>
                       {s.sport.toUpperCase()}
                     </Badge>
@@ -551,7 +551,7 @@ export default async function SignalsPage({
                   </Td>
                   <Td>{marketChip(s)}</Td>
                   <Td align="right" mono>{num(price, 3)}</Td>
-                  <Td align="right" mono className="hidden sm:table-cell">
+                  <Td align="right" mono>
                     {num(fair, 3)}
                   </Td>
                   <Td align="right">
@@ -568,12 +568,12 @@ export default async function SignalsPage({
                       )}
                     </div>
                   </Td>
-                  <Td align="right" mono muted className="hidden md:table-cell">
+                  <Td align="right" mono muted>
                     {s.yes_book_depth == null
                       ? "—"
                       : `$${Math.round(s.yes_book_depth)}`}
                   </Td>
-                  <Td align="right" mono muted className="hidden md:table-cell">
+                  <Td align="right" mono muted>
                     {s.n_books_used}
                   </Td>
                   {(isAdmin || showAll) && (
