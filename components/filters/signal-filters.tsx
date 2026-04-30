@@ -1,67 +1,39 @@
+"use client";
+
 import Link from "next/link";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
+import { Check, ChevronDown } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import type { SignalFilters } from "@/lib/queries";
 
 
-interface ChipProps {
-  label: string;
-  active: boolean;
-  href: string;
-  hint?: string;
-}
-
-function Chip({ label, active, href, hint }: ChipProps) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-        active
-          ? "border-orange-400 bg-orange-500 text-white shadow-sm hover:bg-orange-400"
-          : "border-zinc-600 bg-zinc-800 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-700",
-      )}
-    >
-      {label}
-      {active && hint && (
-        <span className="text-[10px] uppercase tracking-wide text-orange-300">
-          {hint}
-        </span>
-      )}
-    </Link>
-  );
-}
+const SPORT_LABELS: Record<string, string> = {
+  nhl: "NHL",
+  nba: "NBA",
+  mlb: "MLB",
+  wnba: "WNBA",
+  tennis_atp: "ATP",
+  tennis_wta: "WTA",
+  ncaab: "NCAAB",
+  nfl: "NFL",
+};
 
 
-function SegmentChip({
-  label,
-  active,
-  href,
-  hint,
-}: {
-  label: string;
-  active: boolean;
-  href: string;
-  hint?: string;
-}) {
-  return (
-    <Link
-      href={href}
-      role="radio"
-      aria-checked={active}
-      title={hint}
-      className={cn(
-        "px-3 py-1 text-xs font-semibold transition-colors",
-        active
-          ? "bg-orange-500 text-white"
-          : "bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-zinc-50",
-      )}
-    >
-      {label}
-    </Link>
-  );
-}
+const MIN_EDGE_PRESETS: { value: number; label: string }[] = [
+  { value: 0.005, label: "≥ 0.5%" },
+  { value: 0.01, label: "≥ 1%" },
+  { value: 0.02, label: "≥ 2%" },
+  { value: 0.05, label: "≥ 5%" },
+];
 
 
 function buildHref(current: SignalFilters, patch: Partial<SignalFilters>): string {
@@ -80,16 +52,128 @@ function buildHref(current: SignalFilters, patch: Partial<SignalFilters>): strin
 }
 
 
-const SPORT_LABELS: Record<string, string> = {
-  nhl: "NHL",
-  nba: "NBA",
-  mlb: "MLB",
-  wnba: "WNBA",
-  tennis_atp: "ATP",
-  tennis_wta: "WTA",
-  ncaab: "NCAAB",
-  nfl: "NFL",
-};
+// Shared close-on-select context so MenuItem can dismiss its parent Dropdown
+// without a prop-drilling dance.
+const DropdownContext = createContext<{ close: () => void } | null>(null);
+
+
+interface DropdownProps {
+  label: string;
+  summary: string;
+  active: boolean;
+  align?: "left" | "right";
+  children: React.ReactNode;
+}
+
+
+function Dropdown({ label, summary, active, align = "left", children }: DropdownProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: MouseEvent | TouchEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+          active
+            ? "border-orange-400 bg-orange-500 text-white shadow-sm hover:bg-orange-400"
+            : "border-zinc-600 bg-zinc-800 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-700",
+        )}
+      >
+        <span
+          className={cn(
+            "font-normal",
+            active ? "text-orange-100/80" : "text-zinc-400",
+          )}
+        >
+          {label}:
+        </span>
+        <span className="max-w-[10rem] truncate">{summary}</span>
+        <ChevronDown
+          className={cn(
+            "size-3 transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <DropdownContext.Provider value={{ close: () => setOpen(false) }}>
+          <div
+            id={menuId}
+            role="menu"
+            aria-label={label}
+            className={cn(
+              "absolute z-30 mt-2 max-h-[min(70vh,24rem)] min-w-[12rem] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-1 shadow-xl shadow-black/40",
+              align === "right" ? "right-0" : "left-0",
+            )}
+          >
+            {children}
+          </div>
+        </DropdownContext.Provider>
+      )}
+    </div>
+  );
+}
+
+
+interface MenuItemProps {
+  label: string;
+  href: string;
+  active: boolean;
+  hint?: string;
+}
+
+
+function MenuItem({ label, href, active, hint }: MenuItemProps) {
+  const ctx = useContext(DropdownContext);
+  return (
+    <Link
+      href={href}
+      role="menuitemradio"
+      aria-checked={active}
+      title={hint}
+      onClick={() => ctx?.close()}
+      className={cn(
+        "flex items-center justify-between gap-3 rounded-lg px-3 py-1.5 text-xs whitespace-nowrap",
+        active
+          ? "bg-orange-500/15 text-orange-100"
+          : "text-zinc-100 hover:bg-zinc-800 hover:text-zinc-50",
+      )}
+    >
+      <span>{label}</span>
+      {active && <Check className="size-3.5 text-orange-300 shrink-0" />}
+    </Link>
+  );
+}
 
 
 export function SignalFilterBar({
@@ -101,13 +185,6 @@ export function SignalFilterBar({
   total: number;
   sports?: { sport: string; n: number }[];
 }) {
-  const minEdgePresets: { value: number; label: string }[] = [
-    { value: 0.005, label: "≥ 0.5%" },
-    { value: 0.01, label: "≥ 1%" },
-    { value: 0.02, label: "≥ 2%" },
-    { value: 0.05, label: "≥ 5%" },
-  ];
-
   const anyFilter =
     filters.todayOnly ||
     (filters.minEdge != null && filters.minEdge > 0) ||
@@ -115,82 +192,119 @@ export function SignalFilterBar({
     filters.unresolvedOnly ||
     !!filters.sport;
 
+  const viewSummary = filters.showAll ? "All" : "Live";
+
+  const edgePreset = MIN_EDGE_PRESETS.find((p) => p.value === filters.minEdge);
+  const edgeSummary = edgePreset?.label ?? "any";
+
+  const sportSummary = filters.sport
+    ? SPORT_LABELS[filters.sport] ?? filters.sport.toUpperCase()
+    : "all";
+
+  const quickActiveLabels = [
+    filters.todayOnly && "Today",
+    filters.unresolvedOnly && "Unresolved",
+    filters.alertedOnly && "Alerted",
+  ].filter(Boolean) as string[];
+  const quickSummary =
+    quickActiveLabels.length === 0
+      ? "none"
+      : quickActiveLabels.length === 1
+        ? quickActiveLabels[0]
+        : `${quickActiveLabels.length} active`;
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span
-        className="text-[11px] uppercase tracking-[0.16em] text-zinc-300 mr-1"
-        title="Show only currently-bettable signals (default), or every detection ever logged including closed games and flagged anomalies"
-      >
-        show
-      </span>
-      <div
-        className="inline-flex overflow-hidden rounded-full border border-zinc-700"
-        role="radiogroup"
-        aria-label="View"
-      >
-        <SegmentChip
+      {/* View — Live vs All. Conceptually a primary toggle, but rendered
+          as a dropdown for visual consistency with the other filters. */}
+      <Dropdown label="View" summary={viewSummary} active={!!filters.showAll}>
+        <MenuItem
           label="Live"
           hint="Pre-game, fillable, edge under 5%"
           active={!filters.showAll}
           href={buildHref(filters, { showAll: false })}
         />
-        <SegmentChip
+        <MenuItem
           label="All"
           hint="Includes closed, started, flagged ≥5%, and signals from games up to 12h ago"
           active={!!filters.showAll}
           href={buildHref(filters, { showAll: true })}
         />
-      </div>
-      <span className="ml-2 text-zinc-500">·</span>
-      <Chip
-        label="Today"
-        active={!!filters.todayOnly}
-        href={buildHref(filters, { todayOnly: !filters.todayOnly })}
-      />
-      <Chip
-        label="Unresolved"
-        active={!!filters.unresolvedOnly}
-        href={buildHref(filters, { unresolvedOnly: !filters.unresolvedOnly })}
-      />
-      <Chip
-        label="Alerted"
-        active={!!filters.alertedOnly}
-        href={buildHref(filters, { alertedOnly: !filters.alertedOnly })}
-      />
-      <span className="ml-2 text-zinc-500">·</span>
-      {minEdgePresets.map((p) => (
-        <Chip
-          key={p.value}
-          label={p.label}
-          active={filters.minEdge === p.value}
-          href={buildHref(filters, {
-            minEdge: filters.minEdge === p.value ? undefined : p.value,
-          })}
+      </Dropdown>
+
+      <Dropdown
+        label="Filters"
+        summary={quickSummary}
+        active={quickActiveLabels.length > 0}
+      >
+        <MenuItem
+          label="Today only"
+          active={!!filters.todayOnly}
+          href={buildHref(filters, { todayOnly: !filters.todayOnly })}
         />
-      ))}
+        <MenuItem
+          label="Unresolved"
+          active={!!filters.unresolvedOnly}
+          href={buildHref(filters, { unresolvedOnly: !filters.unresolvedOnly })}
+        />
+        <MenuItem
+          label="Alerted"
+          active={!!filters.alertedOnly}
+          href={buildHref(filters, { alertedOnly: !filters.alertedOnly })}
+        />
+      </Dropdown>
+
+      <Dropdown
+        label="Min edge"
+        summary={edgeSummary}
+        active={filters.minEdge != null && filters.minEdge > 0}
+      >
+        <MenuItem
+          label="Any"
+          active={filters.minEdge == null || filters.minEdge === 0}
+          href={buildHref(filters, { minEdge: undefined })}
+        />
+        {MIN_EDGE_PRESETS.map((p) => (
+          <MenuItem
+            key={p.value}
+            label={p.label}
+            active={filters.minEdge === p.value}
+            href={buildHref(filters, { minEdge: p.value })}
+          />
+        ))}
+      </Dropdown>
+
       {sports.length > 0 && (
-        <>
-          <span className="ml-2 text-zinc-500">·</span>
+        <Dropdown
+          label="Sport"
+          summary={sportSummary}
+          active={!!filters.sport}
+        >
+          <MenuItem
+            label="All sports"
+            active={!filters.sport}
+            href={buildHref(filters, { sport: undefined })}
+          />
           {sports.map((s) => (
-            <Chip
+            <MenuItem
               key={s.sport}
               label={`${SPORT_LABELS[s.sport] ?? s.sport.toUpperCase()} (${s.n})`}
               active={filters.sport === s.sport}
-              href={buildHref(filters, {
-                sport: filters.sport === s.sport ? undefined : s.sport,
-              })}
+              href={buildHref(filters, { sport: s.sport })}
             />
           ))}
-        </>
+        </Dropdown>
       )}
+
       {anyFilter && (
         <Link
           href="/"
-          className="ml-2 text-xs text-zinc-300 hover:text-zinc-100 underline"
+          className="text-xs text-zinc-300 underline hover:text-zinc-100"
         >
           clear filters
         </Link>
       )}
+
       <span className="ml-auto">
         <Badge variant="muted" mono>
           {total} match{total === 1 ? "" : "es"}
