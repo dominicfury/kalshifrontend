@@ -6,6 +6,7 @@ import {
   AUTH_COOKIE_MAX_AGE,
   signToken,
 } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
 import {
   consumeEmailVerificationCode,
   findUserById,
@@ -16,6 +17,16 @@ import {
 import { sendEmail, verificationEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
+
+// 6-digit codes are 1-in-1M; without a brute-force cap an attacker can
+// guess every code in a few minutes. 5 attempts per 15 min per user_id is
+// well below brute-force feasibility while still tolerating fat-fingers.
+const VERIFY_USER_MAX = 5;
+const VERIFY_WINDOW_SEC = 15 * 60;
+// Resend has a separate, looser bucket: max 3 sends per user per hour to
+// keep the Resend quota safe and discourage email-bombing a target.
+const RESEND_USER_MAX = 3;
+const RESEND_WINDOW_SEC = 60 * 60;
 
 export async function POST(req: Request) {
   let body: { user_id?: number; code?: string; resend?: boolean };
@@ -41,6 +52,18 @@ export async function POST(req: Request) {
     if (!user.email) {
       return NextResponse.json({ error: "no email on file" }, { status: 400 });
     }
+    const resendRl = await checkRateLimit({
+      bucket: "verify-email:resend",
+      key: String(user_id),
+      max: RESEND_USER_MAX,
+      windowSec: RESEND_WINDOW_SEC,
+    });
+    if (!resendRl.allowed) {
+      return NextResponse.json(
+        { error: "too many resend requests, try again later" },
+        { status: 429, headers: { "Retry-After": String(resendRl.retryAfterSec) } },
+      );
+    }
     const newCode = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
     await setEmailVerificationCode(user_id, newCode);
     const tpl = verificationEmail(newCode);
@@ -59,6 +82,22 @@ export async function POST(req: Request) {
   const code = String(body.code ?? "").trim();
   if (!/^\d{6}$/.test(code)) {
     return NextResponse.json({ error: "code must be 6 digits" }, { status: 400 });
+  }
+
+  // Brute-force cap: count attempts (success or fail) inside the window.
+  // Recording happens before the consume call so an exhausted attacker
+  // can't burn the last attempt to learn the code.
+  const verifyRl = await checkRateLimit({
+    bucket: "verify-email:attempt",
+    key: String(user_id),
+    max: VERIFY_USER_MAX,
+    windowSec: VERIFY_WINDOW_SEC,
+  });
+  if (!verifyRl.allowed) {
+    return NextResponse.json(
+      { error: "too many verification attempts, try again later" },
+      { status: 429, headers: { "Retry-After": String(verifyRl.retryAfterSec) } },
+    );
   }
 
   const ok = await consumeEmailVerificationCode(user_id, code);

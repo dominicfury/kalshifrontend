@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createSubscription, listSubscriptionsForUser } from "@/lib/alerts";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, isSameOrigin } from "@/lib/session";
 import { findUserById } from "@/lib/users";
 
 export const runtime = "nodejs";
@@ -25,6 +25,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (!isSameOrigin(req)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const me = await requireVerified();
   if (!me) {
     return NextResponse.json({ error: "verified users only" }, { status: 403 });

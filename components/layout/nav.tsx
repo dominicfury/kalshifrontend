@@ -32,14 +32,21 @@ export default function Nav({ role }: { role: "user" | "admin" }) {
           <Link
             key={n.href}
             href={n.href}
+            aria-current={active ? "page" : undefined}
             className={cn(
-              "relative rounded-md px-2 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:text-sm",
+              "relative rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors sm:px-3 sm:text-sm",
               active
-                ? "text-zinc-50 bg-zinc-800"
-                : "text-zinc-300 hover:text-zinc-50 hover:bg-zinc-900",
+                ? "bg-zinc-800 text-zinc-50 shadow-sm shadow-black/20 ring-1 ring-zinc-700"
+                : "text-zinc-300 hover:bg-zinc-900 hover:text-zinc-50",
             )}
           >
             {n.label}
+            {active && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-x-3 -bottom-px h-px bg-gradient-to-r from-transparent via-orange-400 to-transparent"
+              />
+            )}
           </Link>
         );
       })}

@@ -1,26 +1,89 @@
 @import "tailwindcss";
 
+/**
+ * Design tokens — single source of truth for the dark theme.
+ *
+ * Naming follows surface/role semantics rather than raw color steps:
+ * `--surface-1` is the page floor, `--surface-2` is a card, `--text-muted`
+ * is dim-but-still-readable on the deepest surface (zinc-300 ≥ 4.5:1 over
+ * zinc-950 — meets WCAG AA for normal text).
+ *
+ * Tailwind utility classes still work; these tokens exist so handwritten
+ * styles (focus rings, gradients, glows) reference the same palette.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-base: #09090b;          /* zinc-950 */
+  --surface-1: #18181b;        /* zinc-900 */
+  --surface-2: #27272a;        /* zinc-800 */
+  --border-subtle: #27272a;    /* zinc-800 */
+  --border-strong: #3f3f46;    /* zinc-700 */
+
+  --text-primary: #f4f4f5;     /* zinc-100  — body / headings on dark */
+  --text-secondary: #d4d4d8;   /* zinc-300  — supporting copy, ≥4.5:1 */
+  --text-muted: #a1a1aa;       /* zinc-400  — labels, captions, footer */
+  --text-faint: #71717a;       /* zinc-500  — only on bright surfaces */
+
+  --accent: #f97316;           /* orange-500 — primary CTA */
+  --accent-soft: #fb923c;      /* orange-400 */
+  --accent-glow: rgba(249, 115, 22, 0.35);
+
+  --success: #34d399;          /* emerald-400 */
+  --warning: #fbbf24;           /* amber-400 */
+  --danger: #f87171;            /* rose-400 */
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg-base);
+  --color-foreground: var(--text-primary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/**
+ * Body defaults. The previous globals.css forced `font-family: Arial,
+ * Helvetica, sans-serif` which overrode the Geist font wired in via the
+ * <html> className. Switch to the CSS variable so Geist actually applies.
+ */
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/**
+ * Consistent, visible focus ring across native form controls and links.
+ * The default browser ring is invisible on dark theme; we layer an orange
+ * glow so keyboard users can always see where they are.
+ */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/**
+ * Selection uses the accent so it doesn't fade into the dark surface.
+ */
+::selection {
+  background: var(--accent-glow);
+  color: var(--text-primary);
+}
+
+/**
+ * Respect reduced-motion preference. Most of the app is server-rendered
+ * with minimal animation but live-update glows and the AutoRefresh dot
+ * pulse should bow out for users who've asked.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

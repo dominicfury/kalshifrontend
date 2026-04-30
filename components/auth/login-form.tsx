@@ -1,15 +1,19 @@
 "use client";
 
 import { Loader2, LogIn } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { safeRedirectPath } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/";
+  // Validate the `?next=` param against open-redirect: an attacker could
+  // craft `/login?next=//evil.com` to bounce a successful login to an
+  // attacker-controlled origin. safeRedirectPath rejects anything that
+  // isn't a same-origin relative path.
+  const next = safeRedirectPath(searchParams.get("next"), "/");
   const justVerified = searchParams.get("verified") === "1";
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

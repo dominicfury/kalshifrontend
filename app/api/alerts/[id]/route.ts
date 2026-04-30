@@ -5,7 +5,7 @@ import {
   findSubscription,
   updateSubscription,
 } from "@/lib/alerts";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, isSameOrigin } from "@/lib/session";
 import { findUserById } from "@/lib/users";
 
 export const runtime = "nodejs";
@@ -36,6 +36,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  if (!isSameOrigin(req)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const { id } = await params;
   const subId = Number(id);
   if (!Number.isFinite(subId) || subId <= 0) {
@@ -87,9 +90,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  if (!isSameOrigin(req)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const { id } = await params;
   const subId = Number(id);
   if (!Number.isFinite(subId) || subId <= 0) {

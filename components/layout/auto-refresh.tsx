@@ -117,7 +117,7 @@ export function AutoRefresh({
       role="status"
       aria-live="polite"
       className={cn(
-        "inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.16em] text-zinc-500",
+        "inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.16em] text-zinc-400",
         status === "offline" && "text-rose-300",
         className,
       )}
