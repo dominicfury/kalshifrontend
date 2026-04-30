@@ -113,7 +113,7 @@ export default async function SettingsPage() {
         eyebrow="System config + diagnostics"
         title="Settings"
         description="Live API health, quota usage, and recent errors. Use this page to spot when something stopped working."
-        actions={<AutoRefresh intervalMs={30_000} />}
+        actions={<AutoRefresh intervalMs={60_000} />}
       />
 
       <Section

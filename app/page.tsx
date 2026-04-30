@@ -229,7 +229,7 @@ export default async function SignalsPage({
         </div>
         <div className="flex items-center gap-3 text-xs text-zinc-300">
           {isAdmin && <RepollButton />}
-          <AutoRefresh intervalMs={30_000} />
+          <AutoRefresh intervalMs={60_000} />
           <span className="inline-flex items-center gap-1.5">
             <Activity className="size-3.5" />
             {signals.length} rows

@@ -1,3 +1,5 @@
+import { unstable_cache } from "next/cache";
+
 import { getDb } from "./db";
 
 export interface SignalRow {
@@ -265,7 +267,17 @@ export interface SportActivity {
 const SPORT_LIVE_HOURS = 2;     // game in next 2h → 🟢 (pre-game / actionable)
 const SPORT_SOON_HOURS = 24;    // game in next 24h → 🟡 (signals coming)
 
-export async function fetchSportActivity(): Promise<SportActivity[]> {
+// Cached across requests — the underlying event schedule changes
+// roughly hourly (when new games get added) so a 60s revalidate is
+// plenty fresh. Saves the dashboard from running this scan on every
+// page render.
+export const fetchSportActivity = unstable_cache(
+  _fetchSportActivityImpl,
+  ["fetch-sport-activity-v1"],
+  { revalidate: 60 },
+);
+
+async function _fetchSportActivityImpl(): Promise<SportActivity[]> {
   const db = getDb();
   const r = await db.execute({
     sql: `

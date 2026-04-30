@@ -51,7 +51,7 @@ export default async function HealthPage() {
         eyebrow="updated every 30s"
         title="System health"
         description="Poller freshness, signal counts, and matcher coverage at a glance."
-        actions={<AutoRefresh intervalMs={30_000} />}
+        actions={<AutoRefresh intervalMs={60_000} />}
       />
 
       {error && (
