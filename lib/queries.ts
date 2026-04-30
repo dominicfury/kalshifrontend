@@ -440,9 +440,11 @@ async function _fetchSportActivityImpl(): Promise<SportActivity[]> {
   // Backfill the sports we support but have no upcoming events for so the
   // dashboard shows them as 'dark' rather than hiding them entirely (silence
   // tells you "off-season / off-day," not "we forgot about this sport").
-  // Tennis is excluded — Odds API tennis keys are tournament-specific so
-  // we don't poll them, and showing a permanently-dark chip is just noise.
-  const known = ["nhl", "nba", "mlb", "wnba"];
+  // Tennis tournaments rotate weekly; the backend auto-discovers active
+  // ATP/WTA tournament keys from the Odds API /sports endpoint and folds
+  // them into the polling list, so tennis_atp / tennis_wta appear here
+  // when there's a live tournament running.
+  const known = ["nhl", "nba", "mlb", "wnba", "tennis_atp", "tennis_wta"];
   const seen = new Set(rows.map((r) => r.sport));
   for (const sport of known) {
     if (!seen.has(sport)) {
@@ -548,12 +550,16 @@ export async function fetchSignalDetail(id: number): Promise<SignalDetail | null
   }
 
   // Latest book quotes per book for both sides of the devig pair.
+  // Mirrors the backend PAIRS dict in matcher/engine.py — keep them in sync.
   const PAIRS: Record<string, [string, string]> = {
     moneyline: ["home", "away"],
     puckline: ["home", "away"],
+    runline: ["home", "away"],
+    spread: ["home", "away"],
     total: ["over", "under"],
     period_total: ["over", "under"],
     period_moneyline: ["home", "away"],
+    match_winner: ["home", "away"],  // tennis
   };
   const pair = PAIRS[signalRow.market_type];
   const otherSide = pair ? (signalRow.side === pair[0] ? pair[1] : pair[0]) : null;

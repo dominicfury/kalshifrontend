@@ -91,6 +91,18 @@ export function resolveBet(s: {
     return `${team} ML · ${yesNo}`;
   }
 
+  if (s.market_type === "match_winner") {
+    // Tennis. Same home/away resolution as moneyline; the "team" here is
+    // a single player. No "ML" suffix since the bet is implicitly "win
+    // the match" — just the player's name reads cleanly.
+    const marketIsHome = s.market_side === "home";
+    const player =
+      (marketIsHome && s.side === "yes") || (!marketIsHome && s.side === "no")
+        ? home
+        : away;
+    return `${player} · ${yesNo}`;
+  }
+
   if (s.market_type === "total") {
     const direction = s.side === "yes" ? "Over" : "Under";
     const line = s.line ?? 0;
