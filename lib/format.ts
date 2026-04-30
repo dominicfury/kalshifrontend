@@ -58,14 +58,17 @@ export function teamLabel(slug: string): string {
  * signals table, signal detail page, AI chat title/payload, and the
  * backend email template (which has its own mirror in user_alerts.py).
  *
+ * Output always includes the Kalshi YES/NO side as a suffix so the user
+ * knows which button to click after the Kalshi link opens the contract.
+ * Examples:
+ *   moneyline → "Lakers ML · YES" or "Lakers ML · NO"
+ *   total     → "Over 6.5 · YES" / "Under 6.5 · NO"
+ *   puckline  → "Tampa Bay -1.5 · YES" / "Edmonton +1.5 · NO"
+ *
  * The Kalshi market is "Did [market_side team / outcome] hit?" YES/NO is
- * which side of THAT contract is +EV. So:
- *   moneyline + market_side='home' + side='yes' → bet home wins
- *   moneyline + market_side='home' + side='no'  → bet away wins
- *   total (always market_side='over') + side='yes' → bet over
- *   total + side='no' → bet under
- *   spread/puckline: line is home-perspective; resolve which team wins
- *     with their effective line.
+ * which side of THAT contract is +EV. The team / over-under resolution
+ * tells you WHAT you're betting on; the YES/NO suffix tells you WHICH
+ * Kalshi button to click on the contract page.
  */
 export function resolveBet(s: {
   market_type: string;
@@ -77,6 +80,7 @@ export function resolveBet(s: {
 }): string {
   const home = teamLabel(s.home_team);
   const away = teamLabel(s.away_team);
+  const yesNo = s.side.toUpperCase();
 
   if (s.market_type === "moneyline") {
     const marketIsHome = s.market_side === "home";
@@ -84,13 +88,13 @@ export function resolveBet(s: {
       (marketIsHome && s.side === "yes") || (!marketIsHome && s.side === "no")
         ? home
         : away;
-    return `${team} ML`;
+    return `${team} ML · ${yesNo}`;
   }
 
   if (s.market_type === "total") {
     const direction = s.side === "yes" ? "Over" : "Under";
     const line = s.line ?? 0;
-    return `${direction} ${line}`;
+    return `${direction} ${line} · ${yesNo}`;
   }
 
   if (
@@ -103,13 +107,13 @@ export function resolveBet(s: {
     const line = s.line ?? 0;
     const team = marketIsHome === yesPicksMarketTeam ? home : away;
     const teamLine = marketIsHome === yesPicksMarketTeam ? line : -line;
-    if (teamLine > 0) return `${team} +${teamLine}`;
-    if (teamLine < 0) return `${team} ${teamLine}`;
-    return `${team} PK`;
+    if (teamLine > 0) return `${team} +${teamLine} · ${yesNo}`;
+    if (teamLine < 0) return `${team} ${teamLine} · ${yesNo}`;
+    return `${team} PK · ${yesNo}`;
   }
 
   // Fallback for unrecognized market types
-  return `${s.market_type.toUpperCase()}${s.line != null ? ` ${s.line}` : ""} ${s.side.toUpperCase()}`;
+  return `${s.market_type.toUpperCase()}${s.line != null ? ` ${s.line}` : ""} · ${yesNo}`;
 }
 
 export function clvColor(clv: number | null): string {
