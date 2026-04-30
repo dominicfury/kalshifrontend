@@ -257,10 +257,13 @@ export interface SportActivity {
   events_24h: number;
 }
 
-// Bucket cutoffs for the per-sport indicator dot.
-const SPORT_LIVE_HOURS = 2;     // game in next 2h or recently started → 🟢
-const SPORT_SOON_HOURS = 24;    // game in next 24h → 🟡
-const SPORT_BACKWINDOW_H = 4;   // count games started in the last 4h as still relevant
+// Bucket cutoffs for the per-sport indicator dot. We only count FUTURE
+// events — "active" should mean "we'd act on a signal right now," and
+// signal generation skips in-progress games anyway. A game that ended
+// two hours ago contributes nothing actionable to the dashboard, so
+// having a sport stay green while its game finishes was misleading.
+const SPORT_LIVE_HOURS = 2;     // game in next 2h → 🟢 (pre-game / actionable)
+const SPORT_SOON_HOURS = 24;    // game in next 24h → 🟡 (signals coming)
 
 export async function fetchSportActivity(): Promise<SportActivity[]> {
   const db = getDb();
@@ -271,11 +274,11 @@ export async function fetchSportActivity(): Promise<SportActivity[]> {
         COUNT(*) AS events_24h,
         MIN((julianday(start_time) - julianday('now')) * 24) AS hours_to_next
       FROM events
-      WHERE start_time >= datetime('now', '-' || ? || ' hours')
+      WHERE start_time >= datetime('now')
         AND start_time <= datetime('now', '+' || ? || ' hours')
       GROUP BY sport
     `,
-    args: [SPORT_BACKWINDOW_H, SPORT_SOON_HOURS],
+    args: [SPORT_SOON_HOURS],
   });
 
   const rows = r.rows.map((row) => {
