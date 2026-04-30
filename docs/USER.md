@@ -71,7 +71,6 @@ The default list shows only signals that meet ALL of these:
 - **Edge after fees < 5%** (anything bigger is almost always a data bug per spec §2)
 - **Edge at size ≥ 0.5%** (signals where fillable edge collapsed are dropped)
 - **Kalshi staleness ≤ 10 min** (Kalshi market actively quoted)
-- **Book staleness ≤ 5 min** (books still moving — fair value is current)
 - **Depth ≥ $25** (per spec; thinner books are unfillable in any meaningful size)
 - **Latest detection per (market, side)** — duplicates collapsed
 

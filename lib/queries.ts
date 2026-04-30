@@ -108,12 +108,17 @@ export async function fetchRecentSignals(
   // Default ("best info") view — only show signals that are:
   //   1. PRE-GAME: event hasn't started yet (you can't bet a game in progress)
   //   2. NOT CLOSED: closing line not yet recorded (signal is still live)
-  //   3. NOT STALE: Kalshi market actively quoted (≤ 10 min since last move)
-  //   4. NOT HUGE: edge < 5% (huge edges are almost always data bugs per spec §2)
-  //   5. FRESH BOOKS: book staleness ≤ 300s (5 min — books moving recently)
+  //   3. NOT HUGE: edge < 5% (huge edges are almost always data bugs per spec §2)
+  //   4. NOT STALE (Kalshi side): ≤ 10 min since last Kalshi price move
+  //   5. AT-SIZE PASS: edge_at_size also ≥ 0.5% (catches legacy phantom rows)
   //   6. FILLABLE: depth ≥ $25 OR depth IS NULL (per spec §10 thin-book rule)
-  //   7. AT-SIZE PASS: edge_at_size also ≥ 0.5% (already enforced at signal-gen,
-  //      duplicated here so legacy pre-fix rows also get filtered out)
+  //
+  // We deliberately do NOT filter on book_staleness_sec at view time:
+  // book_staleness measures "time since the consensus PRICE MOVED" — with
+  // a 30-min book poll cadence, a healthy book that didn't move at the
+  // last poll routinely shows 1800–3600s of staleness, which is fine.
+  // Stale-Kalshi (filter #4) is the dangerous case the spec actually warns
+  // about (the trap where books moved on news but Kalshi didn't).
   //
   // Visible via ?all=1 for full audit trail / CLV bucket review.
   if (!filters.showAll) {
@@ -123,7 +128,6 @@ export async function fetchRecentSignals(
       "(s.edge_pct_after_fees_at_size IS NULL OR s.edge_pct_after_fees_at_size >= 0.005)",
     );
     where.push("(s.kalshi_staleness_sec IS NULL OR s.kalshi_staleness_sec <= 600)");
-    where.push("(s.book_staleness_sec IS NULL OR s.book_staleness_sec <= 300)");
     where.push("(s.yes_book_depth IS NULL OR s.yes_book_depth >= 25)");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
