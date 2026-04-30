@@ -234,7 +234,7 @@ export default async function SignalsPage({
             <Activity className="size-3.5" />
             {signals.length} rows
           </span>
-          {withClv > 0 && (
+          {isAdmin && withClv > 0 && (
             <span className="text-zinc-300">
               {positiveClv}/{withClv} CLV+
             </span>
@@ -353,26 +353,30 @@ export default async function SignalsPage({
                 />
               </Th>
               <Th align="right">Depth</Th>
-              <Th align="right">
-                <SortHeader
-                  label="K stale"
-                  sortKey="kalshi_stale"
-                  active={sort.key === "kalshi_stale"}
-                  dir={sort.dir}
-                  href={sortHref}
-                  align="right"
-                />
-              </Th>
-              <Th align="right">
-                <SortHeader
-                  label="B stale"
-                  sortKey="book_stale"
-                  active={sort.key === "book_stale"}
-                  dir={sort.dir}
-                  href={sortHref}
-                  align="right"
-                />
-              </Th>
+              {isAdmin && (
+                <>
+                  <Th align="right">
+                    <SortHeader
+                      label="K stale"
+                      sortKey="kalshi_stale"
+                      active={sort.key === "kalshi_stale"}
+                      dir={sort.dir}
+                      href={sortHref}
+                      align="right"
+                    />
+                  </Th>
+                  <Th align="right">
+                    <SortHeader
+                      label="B stale"
+                      sortKey="book_stale"
+                      active={sort.key === "book_stale"}
+                      dir={sort.dir}
+                      href={sortHref}
+                      align="right"
+                    />
+                  </Th>
+                </>
+              )}
               <Th align="right">
                 <SortHeader
                   label="Books"
@@ -383,16 +387,18 @@ export default async function SignalsPage({
                   align="right"
                 />
               </Th>
-              <Th align="right">
-                <SortHeader
-                  label="CLV"
-                  sortKey="clv"
-                  active={sort.key === "clv"}
-                  dir={sort.dir}
-                  href={sortHref}
-                  align="right"
-                />
-              </Th>
+              {isAdmin && (
+                <Th align="right">
+                  <SortHeader
+                    label="CLV"
+                    sortKey="clv"
+                    active={sort.key === "clv"}
+                    dir={sort.dir}
+                    href={sortHref}
+                    align="right"
+                  />
+                </Th>
+              )}
               <Th>Status</Th>
               <Th>AI</Th>
             </Tr>
@@ -446,10 +452,16 @@ export default async function SignalsPage({
                 <Td align="right" mono muted>
                   {s.yes_book_depth == null ? "—" : `$${Math.round(s.yes_book_depth)}`}
                 </Td>
-                <Td align="right">{stalenessCell(s.kalshi_staleness_sec, 600)}</Td>
-                <Td align="right">{stalenessCell(s.book_staleness_sec, 90)}</Td>
+                {isAdmin && (
+                  <>
+                    <Td align="right">{stalenessCell(s.kalshi_staleness_sec, 600)}</Td>
+                    <Td align="right">{stalenessCell(s.book_staleness_sec, 90)}</Td>
+                  </>
+                )}
                 <Td align="right" mono muted>{s.n_books_used}</Td>
-                <Td align="right">{clvBadge(s.clv_pct)}</Td>
+                {isAdmin && (
+                  <Td align="right">{clvBadge(s.clv_pct)}</Td>
+                )}
                 <Td>
                   {s.resolved_outcome === "yes" && (
                     <Badge variant="positive" mono>WIN</Badge>
