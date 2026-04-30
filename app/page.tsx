@@ -289,13 +289,6 @@ function LiveEmptyState({
         <div className="mt-5 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs">
           <span className="text-zinc-300">
             <span className="font-mono tabular-nums text-zinc-100">
-              {stats.active_markets}
-            </span>{" "}
-            markets actively quoted
-          </span>
-          <span className="text-zinc-500">·</span>
-          <span className="text-zinc-300">
-            <span className="font-mono tabular-nums text-zinc-100">
               {stats.signals_total}
             </span>{" "}
             detections in last 15m
@@ -335,6 +328,57 @@ function LiveEmptyState({
         </Link>
       </div>
     </div>
+  );
+}
+
+
+/** Per-source poll-health pill ("Kalshi 12s", "Books 2m") for the page
+ * header. Color tracks the configured cadence: green if the latest poll
+ * is within 1× the interval, amber within 3×, rose past that. Tooltip
+ * spells out the cadence so the user knows what's expected. */
+function PollHealthPill({
+  label,
+  ageSec,
+  intervalSec,
+}: {
+  label: string;
+  ageSec: number | null;
+  intervalSec: number;
+}) {
+  // Floors keep the green band sane for fast cadences (e.g. K=30s).
+  const greenAt = Math.max(intervalSec, 60);
+  const amberAt = Math.max(intervalSec * 3, 180);
+  let tone = "text-zinc-400";
+  let dot = "bg-zinc-600";
+  if (ageSec != null) {
+    if (ageSec <= greenAt) {
+      tone = "text-emerald-300";
+      dot = "bg-emerald-400";
+    } else if (ageSec <= amberAt) {
+      tone = "text-amber-300";
+      dot = "bg-amber-400";
+    } else {
+      tone = "text-rose-300";
+      dot = "bg-rose-400";
+    }
+  }
+  const display =
+    ageSec == null
+      ? "—"
+      : ageSec < 60
+        ? `${ageSec}s`
+        : ageSec < 3600
+          ? `${Math.round(ageSec / 60)}m`
+          : `${(ageSec / 3600).toFixed(1)}h`;
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-[10px] ${tone}`}
+      title={`Last ${label} poll · cadence ${formatInterval(intervalSec)}`}
+    >
+      <span className={`size-1.5 rounded-full ${dot}`} />
+      <span className="uppercase tracking-[0.16em]">{label}</span>
+      <span className="font-mono tabular-nums normal-case">{display}</span>
+    </span>
   );
 }
 
@@ -389,14 +433,20 @@ export default async function SignalsPage({
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 pb-4">
         <div className="flex flex-wrap items-center gap-3">
           <SportActivityBar activity={sportActivity} />
-          <span
-            className="hidden md:inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-400"
-            title="Polling cadence — admin can change in Settings"
-          >
-            polls · K{formatInterval(kalshiIntervalSec)} · B{formatInterval(bookIntervalSec)}
-          </span>
         </div>
-        <div className="flex items-center gap-3 text-xs text-zinc-300">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-300">
+          <div className="flex items-center gap-1.5">
+            <PollHealthPill
+              label="Kalshi"
+              ageSec={liveStats?.kalshi_last_poll_sec_ago ?? null}
+              intervalSec={kalshiIntervalSec}
+            />
+            <PollHealthPill
+              label="Books"
+              ageSec={liveStats?.books_last_poll_sec_ago ?? null}
+              intervalSec={bookIntervalSec}
+            />
+          </div>
           {isAdmin && <RepollButton />}
           <AutoRefresh intervalMs={60_000} />
           <span className="inline-flex items-center gap-1.5">

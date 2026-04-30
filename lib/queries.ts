@@ -290,37 +290,25 @@ export async function fetchRecentSignals(
 }
 
 
-/** Quick counts for the empty state — shows the user what's actually
- * happening right now even when the Live filter returns zero rows. */
+/** Quick counts for the empty state + top-right health indicators.
+ *
+ * Returns "seconds since most recent kalshi_quote.polled_at" and the same
+ * for book_quotes — used to render the live Kalshi/Books health pills in
+ * the page header so the user can tell at a glance whether the pollers
+ * are actually running. */
 export interface LiveStats {
-  active_markets: number;       // pre-game markets being polled in last 3m
-  signals_total: number;        // any +EV detection in the last 15m
-  signals_live: number;         // detections matching the Live default filter
+  signals_total: number;          // any +EV detection in the last 15m
   next_event_min: number | null;
   next_event_sport: string | null;
+  kalshi_last_poll_sec_ago: number | null;
+  books_last_poll_sec_ago: number | null;
 }
 
 export async function fetchLiveStats(): Promise<LiveStats> {
   const db = getDb();
   const r = await db.execute(`
-    WITH lq AS (
-      SELECT market_id, MAX(polled_at) AS polled_at
-      FROM kalshi_quotes
-      GROUP BY market_id
-    ),
-    pregame_active AS (
-      SELECT km.id
-      FROM kalshi_markets km
-      JOIN events e ON e.id = km.event_id
-      JOIN lq ON lq.market_id = km.id
-      WHERE e.start_time > datetime('now')
-        AND lq.polled_at >= datetime('now', '-3 minutes')
-        AND km.status = 'active'
-    ),
-    recent_signals AS (
-      SELECT s.id, s.kalshi_market_id, s.side,
-             s.edge_pct_after_fees, s.edge_pct_after_fees_at_size,
-             s.yes_book_depth, s.n_books_used, s.closing_kalshi_yes_price,
+    WITH recent_signals AS (
+      SELECT s.id,
              ROW_NUMBER() OVER (
                PARTITION BY s.kalshi_market_id, s.side
                ORDER BY s.detected_at DESC
@@ -335,29 +323,29 @@ export async function fetchLiveStats(): Promise<LiveStats> {
       WHERE start_time > datetime('now')
       ORDER BY start_time ASC
       LIMIT 1
-    )
+    ),
+    last_k AS (SELECT MAX(polled_at) AS polled_at FROM kalshi_quotes),
+    last_b AS (SELECT MAX(polled_at) AS polled_at FROM book_quotes)
     SELECT
-      (SELECT COUNT(*) FROM pregame_active) AS active_markets,
       (SELECT COUNT(*) FROM recent_signals WHERE rn = 1) AS signals_total,
-      (SELECT COUNT(*) FROM recent_signals rs
-        WHERE rs.rn = 1
-          AND rs.closing_kalshi_yes_price IS NULL
-          AND rs.edge_pct_after_fees < 0.05
-          AND rs.edge_pct_after_fees_at_size >= 0.005
-          AND rs.yes_book_depth >= 25
-          AND rs.n_books_used >= 2
-          AND rs.kalshi_market_id IN (SELECT id FROM pregame_active)
-      ) AS signals_live,
       (SELECT min_to_start FROM next_event) AS next_event_min,
-      (SELECT sport FROM next_event) AS next_event_sport
+      (SELECT sport FROM next_event) AS next_event_sport,
+      CAST((julianday('now') - julianday((SELECT polled_at FROM last_k))) * 86400 AS INTEGER) AS kalshi_last_poll_sec_ago,
+      CAST((julianday('now') - julianday((SELECT polled_at FROM last_b))) * 86400 AS INTEGER) AS books_last_poll_sec_ago
   `);
   const row = r.rows[0] as unknown as Record<string, unknown>;
   return {
-    active_markets: Number(row.active_markets) || 0,
     signals_total: Number(row.signals_total) || 0,
-    signals_live: Number(row.signals_live) || 0,
     next_event_min: row.next_event_min == null ? null : Number(row.next_event_min),
     next_event_sport: row.next_event_sport == null ? null : String(row.next_event_sport),
+    kalshi_last_poll_sec_ago:
+      row.kalshi_last_poll_sec_ago == null
+        ? null
+        : Number(row.kalshi_last_poll_sec_ago),
+    books_last_poll_sec_ago:
+      row.books_last_poll_sec_ago == null
+        ? null
+        : Number(row.books_last_poll_sec_ago),
   };
 }
 
