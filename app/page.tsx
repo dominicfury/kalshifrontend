@@ -30,8 +30,6 @@ import {
   type SportActivity,
 } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/session";
-import { getInt, KNOWN_KEYS } from "@/lib/system-config";
-
 // Filters are URL-driven, so we render on every request rather than ISR.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -88,15 +86,6 @@ function stalenessCell(sec: number | null, staleAt: number) {
   const tone =
     sec > staleAt ? "text-rose-200" : sec > staleAt / 2 ? "text-amber-200" : "text-zinc-200";
   return <span className={`font-mono tabular-nums ${tone}`}>{sec}s</span>;
-}
-
-
-function formatInterval(sec: number): string {
-  if (sec < 60) return `${sec}s`;
-  const min = Math.round(sec / 60);
-  if (min < 60) return `${min}m`;
-  const h = (sec / 3600).toFixed(min % 60 === 0 ? 0 : 1);
-  return `${h}h`;
 }
 
 
@@ -332,55 +321,6 @@ function LiveEmptyState({
 }
 
 
-/** Per-source poll-health pill ("Kalshi 12s", "Books 2m") for the page
- * header. Color tracks the configured cadence: green if the latest poll
- * is within 1× the interval, amber within 3×, rose past that. Tooltip
- * spells out the cadence so the user knows what's expected. */
-function PollHealthPill({
-  label,
-  ageSec,
-  intervalSec,
-}: {
-  label: string;
-  ageSec: number | null;
-  intervalSec: number;
-}) {
-  // Floors keep the green band sane for fast cadences (e.g. K=30s).
-  const greenAt = Math.max(intervalSec, 60);
-  const amberAt = Math.max(intervalSec * 3, 180);
-  let tone = "text-zinc-400";
-  let dot = "bg-zinc-600";
-  if (ageSec != null) {
-    if (ageSec <= greenAt) {
-      tone = "text-emerald-300";
-      dot = "bg-emerald-400";
-    } else if (ageSec <= amberAt) {
-      tone = "text-amber-300";
-      dot = "bg-amber-400";
-    } else {
-      tone = "text-rose-300";
-      dot = "bg-rose-400";
-    }
-  }
-  const display =
-    ageSec == null
-      ? "—"
-      : ageSec < 60
-        ? `${ageSec}s`
-        : ageSec < 3600
-          ? `${Math.round(ageSec / 60)}m`
-          : `${(ageSec / 3600).toFixed(1)}h`;
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-[10px] ${tone}`}
-      title={`Last ${label} poll · cadence ${formatInterval(intervalSec)}`}
-    >
-      <span className={`size-1.5 rounded-full ${dot}`} />
-      <span className="uppercase tracking-[0.16em]">{label}</span>
-      <span className="font-mono tabular-nums normal-case">{display}</span>
-    </span>
-  );
-}
 
 
 export default async function SignalsPage({
@@ -405,19 +345,14 @@ export default async function SignalsPage({
   let activeSports: { sport: string; n: number }[] = [];
   let sportActivity: SportActivity[] = [];
   let liveStats: LiveStats | null = null;
-  let kalshiIntervalSec = 30;
-  let bookIntervalSec = 1800;
   let error: string | null = null;
   try {
-    [signals, activeSports, sportActivity, liveStats, kalshiIntervalSec, bookIntervalSec] =
-      await Promise.all([
-        fetchRecentSignals(100, filters, sort),
-        fetchActiveSports(),
-        fetchSportActivity(),
-        fetchLiveStats(),
-        getInt(KNOWN_KEYS.KALSHI_POLL_INTERVAL_SEC, 30),
-        getInt(KNOWN_KEYS.BOOK_POLL_INTERVAL_SEC, 1800),
-      ]);
+    [signals, activeSports, sportActivity, liveStats] = await Promise.all([
+      fetchRecentSignals(100, filters, sort),
+      fetchActiveSports(),
+      fetchSportActivity(),
+      fetchLiveStats(),
+    ]);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -434,19 +369,7 @@ export default async function SignalsPage({
         <div className="flex flex-wrap items-center gap-3">
           <SportActivityBar activity={sportActivity} />
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-300">
-          <div className="flex items-center gap-1.5">
-            <PollHealthPill
-              label="Kalshi"
-              ageSec={liveStats?.kalshi_last_poll_sec_ago ?? null}
-              intervalSec={kalshiIntervalSec}
-            />
-            <PollHealthPill
-              label="Books"
-              ageSec={liveStats?.books_last_poll_sec_ago ?? null}
-              intervalSec={bookIntervalSec}
-            />
-          </div>
+        <div className="flex items-center gap-3 text-xs text-zinc-300">
           {isAdmin && <RepollButton />}
           <AutoRefresh intervalMs={60_000} />
           <span className="inline-flex items-center gap-1.5">

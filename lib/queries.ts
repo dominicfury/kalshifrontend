@@ -290,18 +290,11 @@ export async function fetchRecentSignals(
 }
 
 
-/** Quick counts for the empty state + top-right health indicators.
- *
- * Returns "seconds since most recent kalshi_quote.polled_at" and the same
- * for book_quotes — used to render the live Kalshi/Books health pills in
- * the page header so the user can tell at a glance whether the pollers
- * are actually running. */
+/** Quick counts for the Live empty state. */
 export interface LiveStats {
   signals_total: number;          // any +EV detection in the last 15m
   next_event_min: number | null;
   next_event_sport: string | null;
-  kalshi_last_poll_sec_ago: number | null;
-  books_last_poll_sec_ago: number | null;
 }
 
 export async function fetchLiveStats(): Promise<LiveStats> {
@@ -323,29 +316,17 @@ export async function fetchLiveStats(): Promise<LiveStats> {
       WHERE start_time > datetime('now')
       ORDER BY start_time ASC
       LIMIT 1
-    ),
-    last_k AS (SELECT MAX(polled_at) AS polled_at FROM kalshi_quotes),
-    last_b AS (SELECT MAX(polled_at) AS polled_at FROM book_quotes)
+    )
     SELECT
       (SELECT COUNT(*) FROM recent_signals WHERE rn = 1) AS signals_total,
       (SELECT min_to_start FROM next_event) AS next_event_min,
-      (SELECT sport FROM next_event) AS next_event_sport,
-      CAST((julianday('now') - julianday((SELECT polled_at FROM last_k))) * 86400 AS INTEGER) AS kalshi_last_poll_sec_ago,
-      CAST((julianday('now') - julianday((SELECT polled_at FROM last_b))) * 86400 AS INTEGER) AS books_last_poll_sec_ago
+      (SELECT sport FROM next_event) AS next_event_sport
   `);
   const row = r.rows[0] as unknown as Record<string, unknown>;
   return {
     signals_total: Number(row.signals_total) || 0,
     next_event_min: row.next_event_min == null ? null : Number(row.next_event_min),
     next_event_sport: row.next_event_sport == null ? null : String(row.next_event_sport),
-    kalshi_last_poll_sec_ago:
-      row.kalshi_last_poll_sec_ago == null
-        ? null
-        : Number(row.kalshi_last_poll_sec_ago),
-    books_last_poll_sec_ago:
-      row.books_last_poll_sec_ago == null
-        ? null
-        : Number(row.books_last_poll_sec_ago),
   };
 }
 
