@@ -33,7 +33,7 @@ export function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Top nav with login/signup CTAs */}
-      <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/40">
+      <header className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1280px] items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center" aria-label="Sportsbetbrain home">
             <Image
@@ -48,7 +48,7 @@ export function LandingPage() {
           <div className="flex items-center gap-2">
             <Link
               href="/login"
-              className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-200 hover:bg-zinc-900 hover:text-zinc-50"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-100 hover:bg-zinc-800 hover:text-white"
             >
               Login
             </Link>
@@ -63,20 +63,22 @@ export function LandingPage() {
       </header>
 
       <main className="flex-1">
-        {/* Hero */}
-        <section className="mx-auto max-w-[1280px] px-6 pt-16 pb-24 text-center">
+        {/* Hero — solid dark backdrop directly behind the text so the
+            global orange-950 radial gradient never washes it out. */}
+        <section className="relative mx-auto max-w-[1280px] px-6 pt-16 pb-24 text-center">
+          <div className="pointer-events-none absolute inset-x-4 inset-y-8 -z-10 rounded-3xl bg-zinc-950/70" />
           <Image
             src="/logo.png"
             alt="Sportsbetbrain"
             width={360}
             height={316}
             priority
-            className="mx-auto h-72 w-auto"
+            className="mx-auto h-72 w-auto drop-shadow-[0_0_24px_rgba(0,0,0,0.6)]"
           />
-          <h1 className="mt-8 text-4xl font-bold tracking-tight text-zinc-50 sm:text-5xl">
+          <h1 className="mt-8 text-4xl font-bold tracking-tight text-white sm:text-5xl">
             +EV trading on Kalshi sports markets
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-zinc-300">
+          <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-zinc-100">
             Live signal generator that compares Kalshi NHL, NBA, MLB, and WNBA
             contracts against multi-book sportsbook consensus. Validates with
             closing line value, not P&amp;L theater.
@@ -90,12 +92,12 @@ export function LandingPage() {
             </Link>
             <Link
               href="/login"
-              className="rounded-md border border-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-900 hover:text-zinc-50"
+              className="rounded-md border border-zinc-600 bg-zinc-900/60 px-5 py-2.5 text-sm font-medium text-zinc-100 hover:bg-zinc-800 hover:text-white"
             >
               I have an account
             </Link>
           </div>
-          <p className="mt-4 text-xs text-zinc-500">
+          <p className="mt-4 text-xs text-zinc-300">
             New accounts are reviewed by an admin within 12 hours.
           </p>
         </section>
@@ -106,13 +108,13 @@ export function LandingPage() {
             {FEATURES.map((f) => (
               <div
                 key={f.title}
-                className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6 shadow-sm"
+                className="rounded-xl border border-zinc-700 bg-zinc-900/80 p-6 shadow-sm"
               >
                 <f.icon className="size-6 text-orange-300" />
-                <h3 className="mt-4 text-base font-semibold text-zinc-50">
+                <h3 className="mt-4 text-base font-semibold text-white">
                   {f.title}
                 </h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-300">{f.body}</p>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-100">{f.body}</p>
               </div>
             ))}
           </div>
@@ -120,7 +122,7 @@ export function LandingPage() {
 
         {/* Disclaimer */}
         <section className="mx-auto max-w-[1280px] px-6 pb-24">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-6 text-xs leading-relaxed text-zinc-400">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 p-6 text-xs leading-relaxed text-zinc-200">
             Sportsbetbrain surfaces information for personal use. It does
             not place trades, custody funds, or offer financial advice. All
             trading happens on Kalshi (a CFTC-regulated exchange) under
@@ -130,8 +132,8 @@ export function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-zinc-900/80 bg-zinc-950/60">
-        <div className="mx-auto max-w-[1280px] px-6 py-6 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
+      <footer className="border-t border-zinc-800 bg-zinc-950">
+        <div className="mx-auto max-w-[1280px] px-6 py-6 text-[10px] uppercase tracking-[0.16em] text-zinc-400">
           v0 · trust the CLV
         </div>
       </footer>

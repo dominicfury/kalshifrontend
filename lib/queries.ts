@@ -97,12 +97,20 @@ export async function fetchRecentSignals(
     args.push(filters.sport);
   }
   // Default view hides "trap" signals: stale Kalshi books (price sat for
-  // >10 min, almost certainly drifting from current consensus) and huge
+  // >10 min, almost certainly drifting from current consensus), huge
   // edges >5% (almost always settlement-rule mismatch or data bug per
-  // spec §2). Visible via ?all=1 for investigation / CLV bucket review.
+  // spec §2), and signals for games that already started — you can't
+  // bet on a game in progress anyway, and the CLV column would clutter
+  // the live ledger with closed/historical rows. Visible via ?all=1
+  // for investigation / CLV bucket review.
   if (!filters.showAll) {
     where.push("(s.kalshi_staleness_sec IS NULL OR s.kalshi_staleness_sec <= 600)");
     where.push("s.edge_pct_after_fees < 0.05");
+    where.push(
+      "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
+        "JOIN events e ON e.id = km.event_id " +
+        "WHERE e.start_time > datetime('now'))",
+    );
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
