@@ -233,7 +233,7 @@ export default async function SignalDetailPage({
               <Tr>
                 <Th>When</Th>
                 <Th>Side</Th>
-                <Th align="right">Yes ask</Th>
+                <Th align="right">Price</Th>
                 <Th align="right">Fair</Th>
                 <Th align="right">Edge</Th>
               </Tr>
@@ -247,8 +247,12 @@ export default async function SignalDetailPage({
                       {h.side.toUpperCase()}
                     </Badge>
                   </Td>
-                  <Td align="right" mono>{num(h.kalshi_yes_ask, 3)}</Td>
-                  <Td align="right" mono>{num(h.fair_yes_prob, 3)}</Td>
+                  <Td align="right" mono>
+                    {num(h.side === "yes" ? h.kalshi_yes_ask : h.kalshi_no_ask, 3)}
+                  </Td>
+                  <Td align="right" mono>
+                    {num(h.side === "yes" ? h.fair_yes_prob : 1 - h.fair_yes_prob, 3)}
+                  </Td>
                   <Td align="right" mono>{pct(h.edge_pct_after_fees)}</Td>
                 </Tr>
               ))}

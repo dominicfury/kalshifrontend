@@ -70,8 +70,15 @@ const SORT_SQL: Record<SignalSortKey, string> = {
   detected_at: "s.detected_at",
   edge: "s.edge_pct_after_fees",
   edge_at_size: "COALESCE(s.edge_pct_after_fees_at_size, s.edge_pct_after_fees)",
-  kalshi_yes_ask: "s.kalshi_yes_ask",
-  fair: "s.fair_yes_prob",
+  // "Price" column: the price you'd actually pay on Kalshi for the +EV
+  // side. yes_ask for yes-side signals, no_ask for no-side. The sort key
+  // is still named kalshi_yes_ask for URL stability, but it sorts on the
+  // displayed value, not the raw YES ask.
+  kalshi_yes_ask:
+    "(CASE WHEN s.side = 'yes' THEN s.kalshi_yes_ask ELSE s.kalshi_no_ask END)",
+  // "Fair" column: bet-side fair probability. For NO bets, fair on YES is
+  // inverted to 1 - fair_yes_prob so column reads consistently with bet.
+  fair: "(CASE WHEN s.side = 'yes' THEN s.fair_yes_prob ELSE 1.0 - s.fair_yes_prob END)",
   kalshi_stale: "s.kalshi_staleness_sec",
   book_stale: "s.book_staleness_sec",
   n_books: "s.n_books_used",
@@ -148,6 +155,13 @@ export async function fetchRecentSignals(
     where.push("(s.kalshi_staleness_sec IS NULL OR s.kalshi_staleness_sec <= 600)");
     where.push("(s.yes_book_depth IS NULL OR s.yes_book_depth >= 25)");
     where.push("s.n_books_used >= 2");
+    // Detection recency: signals older than 15 min are stale even if their
+    // stored kalshi_staleness_sec snapshot looks fresh. Generate_signals
+    // produces a new row every Kalshi poll (~30s) when an opportunity is
+    // live, so a row >15 min old means the opportunity has collapsed,
+    // polling stopped, or the scheduler is sick — none of which we want
+    // to surface as actionable.
+    where.push("s.detected_at >= datetime('now', '-15 minutes')");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
         "JOIN events e ON e.id = km.event_id " +
@@ -363,6 +377,7 @@ export interface SignalDetail {
     edge_pct_after_fees: number;
     side: "yes" | "no";
     kalshi_yes_ask: number;
+    kalshi_no_ask: number;
     fair_yes_prob: number;
   }[];
 }
@@ -496,7 +511,7 @@ export async function fetchSignalDetail(id: number): Promise<SignalDetail | null
   // History of signals on this market (last 20).
   const histRes = await db.execute({
     sql: `
-      SELECT id, detected_at, edge_pct_after_fees, side, kalshi_yes_ask, fair_yes_prob
+      SELECT id, detected_at, edge_pct_after_fees, side, kalshi_yes_ask, kalshi_no_ask, fair_yes_prob
       FROM signals
       WHERE kalshi_market_id = ?
       ORDER BY detected_at DESC

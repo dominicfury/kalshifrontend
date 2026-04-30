@@ -350,7 +350,7 @@ export default async function SignalsPage({
               <Th>Market</Th>
               <Th align="right">
                 <SortHeader
-                  label="Yes ask"
+                  label="Price"
                   sortKey="kalshi_yes_ask"
                   active={sort.key === "kalshi_yes_ask"}
                   dir={sort.dir}
@@ -440,7 +440,7 @@ export default async function SignalsPage({
             </Tr>
           </THead>
           <TBody>
-            {signals.map((s, idx) => {
+            {signals.map((s) => {
               // Visual flag for rows that need extra investigation:
               //   - rose tint: Kalshi market hasn't moved in >10 min (stale book →
               //     consensus is moving on info, Kalshi isn't, edge is a trap)
@@ -456,18 +456,6 @@ export default async function SignalsPage({
                 : isHugeEdge
                   ? "bg-amber-950/20"
                   : "";
-              // Group consecutive rows with the same matchup: only the first
-              // row in a group renders the sport+matchup cells fully; the
-              // rest dim them so the eye reads multiple signals on the same
-              // game as a single block. Most natural under the default
-              // start_time sort (same game shares start time so signals
-              // cluster), but useful under any sort.
-              const prev = idx > 0 ? signals[idx - 1] : null;
-              const sameMatchupAsPrev =
-                prev != null &&
-                prev.home_team === s.home_team &&
-                prev.away_team === s.away_team &&
-                prev.start_time === s.start_time;
               const fresh = isFreshSignal(s.detected_at);
               return (
               <Tr key={s.id} className={rowTone}>
@@ -487,29 +475,25 @@ export default async function SignalsPage({
                 </Td>
                 <Td>{timeToStartCell(s.time_to_start_min)}</Td>
                 <Td>
-                  {sameMatchupAsPrev ? (
-                    <span className="text-zinc-700">↳</span>
-                  ) : (
-                    <Badge variant="muted" mono>
-                      {s.sport.toUpperCase()}
-                    </Badge>
-                  )}
+                  <Badge variant="muted" mono>
+                    {s.sport.toUpperCase()}
+                  </Badge>
                 </Td>
                 <Td>
-                  {sameMatchupAsPrev ? (
-                    <span className="text-zinc-700">″</span>
-                  ) : (
-                    <Link
-                      href={`/signals/${s.id}`}
-                      className="hover:text-zinc-50"
-                    >
-                      {matchupLabel(s)}
-                    </Link>
-                  )}
+                  <Link
+                    href={`/signals/${s.id}`}
+                    className="hover:text-zinc-50"
+                  >
+                    {matchupLabel(s)}
+                  </Link>
                 </Td>
                 <Td>{marketChip(s)}</Td>
-                <Td align="right" mono>{num(s.kalshi_yes_ask, 3)}</Td>
-                <Td align="right" mono>{num(s.fair_yes_prob, 3)}</Td>
+                <Td align="right" mono>
+                  {num(s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask, 3)}
+                </Td>
+                <Td align="right" mono>
+                  {num(s.side === "yes" ? s.fair_yes_prob : 1 - s.fair_yes_prob, 3)}
+                </Td>
                 <Td align="right">{edgeBadge(s.edge_pct_after_fees)}</Td>
                 <Td align="right">{edgeBadge(s.edge_pct_after_fees_at_size)}</Td>
                 <Td align="right" mono muted>
