@@ -2,7 +2,7 @@
 
 import { Loader2, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -15,21 +15,45 @@ type State =
 
 // Backend kicks the poll off as a background task and returns immediately
 // (fire-and-forget — Vercel hobby times out functions at 10s, much shorter
-// than a full poll cycle). Wait this long, then router.refresh() so the
-// dashboard re-renders with whatever the background poll managed to write.
-const POST_KICKOFF_REFRESH_MS = 18_000;
+// than a full poll cycle). After kickoff we poll /api/health on a tight
+// interval to detect when the server is actually responsive again, falling
+// back to a hard timeout if the poll itself drags. Previously a fixed 18s
+// wait raced against poll cycles that occasionally ran longer; the new
+// behavior refreshes as soon as the server is reachable and bounded above.
+const POST_KICKOFF_MAX_WAIT_MS = 30_000;
+const POST_KICKOFF_PROBE_INTERVAL_MS = 1500;
 
 export default function RepollButton() {
   const [state, setState] = useState<State>({ kind: "idle" });
   const [, startTransition] = useTransition();
   const router = useRouter();
+  // Block re-entry while a repoll is in flight: the backend rate-limits
+  // /api/repoll and we don't want overlapping refresh()es racing each other.
+  const inFlight = useRef<AbortController | null>(null);
+
+  // Cancel any pending probe loop on unmount.
+  useEffect(() => {
+    return () => {
+      inFlight.current?.abort();
+      inFlight.current = null;
+    };
+  }, []);
 
   async function trigger() {
+    if (inFlight.current) return;
+    const ctrl = new AbortController();
+    inFlight.current = ctrl;
     setState({ kind: "running" });
     let r: Response;
     try {
-      r = await fetch("/api/repoll", { method: "POST", cache: "no-store" });
+      r = await fetch("/api/repoll", {
+        method: "POST",
+        cache: "no-store",
+        signal: ctrl.signal,
+      });
     } catch (e) {
+      inFlight.current = null;
+      if (ctrl.signal.aborted) return;
       setState({
         kind: "error",
         message: e instanceof Error ? e.message : "fetch failed",
@@ -53,6 +77,7 @@ export default function RepollButton() {
     >;
 
     if (!r.ok) {
+      inFlight.current = null;
       const message =
         (typeof asObj.error === "string" && asObj.error) ||
         (typeof asObj.detail === "string" && asObj.detail) ||
@@ -66,6 +91,7 @@ export default function RepollButton() {
     }
 
     if (body == null) {
+      inFlight.current = null;
       // 200 OK but body wasn't JSON — exotic but possible if a proxy
       // rewrote the response. Surface raw text so we can debug.
       setState({
@@ -77,11 +103,27 @@ export default function RepollButton() {
     }
 
     setState({ kind: "kicked_off" });
-    setTimeout(() => {
-      startTransition(() => router.refresh());
-      setState({ kind: "ok" });
-      setTimeout(() => setState({ kind: "idle" }), 6000);
-    }, POST_KICKOFF_REFRESH_MS);
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < POST_KICKOFF_MAX_WAIT_MS) {
+      if (ctrl.signal.aborted) return;
+      try {
+        const probe = await fetch("/api/health", {
+          method: "GET",
+          cache: "no-store",
+          signal: ctrl.signal,
+        });
+        if (probe.ok) break;
+      } catch {
+        // Probe failure means the worker is still busy or the backend is
+        // restarting — keep polling until the deadline.
+      }
+      await new Promise((res) => setTimeout(res, POST_KICKOFF_PROBE_INTERVAL_MS));
+    }
+    if (ctrl.signal.aborted) return;
+    inFlight.current = null;
+    startTransition(() => router.refresh());
+    setState({ kind: "ok" });
+    setTimeout(() => setState({ kind: "idle" }), 6000);
   }
 
   const disabled = state.kind === "running" || state.kind === "kicked_off";

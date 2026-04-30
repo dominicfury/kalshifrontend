@@ -1,6 +1,81 @@
 import { unstable_cache } from "next/cache";
+import { z } from "zod";
 
 import { getDb } from "./db";
+
+
+// Helpers — libsql returns numbers as JS numbers, but bigints in some envs
+// land as `bigint` and "1.0" can come back as a string when the column is
+// stored as TEXT. Coerce gently before validating.
+const numLike = z.preprocess((v) => {
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "string" && v !== "" && Number.isFinite(Number(v))) {
+    return Number(v);
+  }
+  return v;
+}, z.number());
+
+const numLikeNullable = z.preprocess((v) => {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "string" && v !== "" && Number.isFinite(Number(v))) {
+    return Number(v);
+  }
+  return v;
+}, z.number().nullable());
+
+const intLike = z.preprocess((v) => {
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "string" && v !== "" && Number.isFinite(Number(v))) {
+    return Number(v);
+  }
+  return v;
+}, z.number().int());
+
+const intLikeNullable = z.preprocess((v) => {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "string" && v !== "" && Number.isFinite(Number(v))) {
+    return Number(v);
+  }
+  return v;
+}, z.number().int().nullable());
+
+
+const SignalRowSchema = z.object({
+  id: intLike,
+  detected_at: z.string(),
+  kalshi_yes_ask: numLike,
+  kalshi_no_ask: numLike,
+  fair_yes_prob: numLike,
+  side: z.enum(["yes", "no"]),
+  edge_pct_after_fees: numLike,
+  edge_pct_after_fees_at_size: numLikeNullable,
+  expected_fill_price: numLikeNullable,
+  yes_book_depth: numLikeNullable,
+  kalshi_staleness_sec: intLikeNullable,
+  book_staleness_sec: intLikeNullable,
+  match_confidence: numLike,
+  alert_sent: intLike,
+  n_books_used: intLike,
+  closing_kalshi_yes_price: numLikeNullable,
+  clv_pct: numLikeNullable,
+  resolved_outcome: z.enum(["yes", "no", "void"]).nullable(),
+  hypothetical_pnl: numLikeNullable,
+  ticker: z.string(),
+  market_type: z.string(),
+  period: z.string(),
+  line: numLikeNullable,
+  raw_title: z.string(),
+  market_side: z.enum(["home", "away", "over", "under"]).nullable(),
+  home_team: z.string(),
+  away_team: z.string(),
+  start_time: z.string(),
+  sport: z.string(),
+  time_to_start_min: intLike,
+  live_polled_at: z.string().nullable(),
+  live_quote_age_sec: intLikeNullable,
+});
 
 export interface SignalRow {
   id: number;
@@ -286,7 +361,21 @@ export async function fetchRecentSignals(
     `,
     args,
   });
-  return result.rows as unknown as SignalRow[];
+  // Validate at the DB boundary: the libsql column types are erased once
+  // serialized and a backend column rename / type drift would silently corrupt
+  // the table (string values would lexicographically sort, etc.). Skip rows
+  // that don't parse rather than tearing down the whole page — the SR will
+  // log them so the bad data is visible without taking down /signals.
+  const validated: SignalRow[] = [];
+  for (const raw of result.rows) {
+    const parsed = SignalRowSchema.safeParse(raw);
+    if (parsed.success) {
+      validated.push(parsed.data as SignalRow);
+    } else if (process.env.NODE_ENV !== "production") {
+      console.warn("[fetchRecentSignals] dropped malformed row", parsed.error.issues);
+    }
+  }
+  return validated;
 }
 
 
