@@ -120,6 +120,10 @@ export async function fetchRecentSignals(
   //   4. NOT STALE (Kalshi side): ≤ 10 min since last Kalshi price move
   //   5. AT-SIZE PASS: edge_at_size also ≥ 0.5% (catches legacy phantom rows)
   //   6. FILLABLE: depth ≥ $25 OR depth IS NULL (per spec §10 thin-book rule)
+  //   7. MULTI-BOOK CONSENSUS: ≥ 2 books in the devig (single-book "consensus"
+  //      is just one bookmaker's opinion — high uncertainty bars on fair value).
+  //      Spec §10 alert gate. We apply it to the view too because users
+  //      shouldn't see 1-book signals as actionable.
   //
   // We deliberately do NOT filter on book_staleness_sec at view time:
   // book_staleness measures "time since the consensus PRICE MOVED" — with
@@ -137,6 +141,7 @@ export async function fetchRecentSignals(
     );
     where.push("(s.kalshi_staleness_sec IS NULL OR s.kalshi_staleness_sec <= 600)");
     where.push("(s.yes_book_depth IS NULL OR s.yes_book_depth >= 25)");
+    where.push("s.n_books_used >= 2");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
         "JOIN events e ON e.id = km.event_id " +

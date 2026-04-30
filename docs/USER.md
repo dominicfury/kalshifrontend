@@ -72,6 +72,7 @@ The default list shows only signals that meet ALL of these:
 - **Edge at size ≥ 0.5%** (signals where fillable edge collapsed are dropped)
 - **Kalshi staleness ≤ 10 min** (Kalshi market actively quoted)
 - **Depth ≥ $25** (per spec; thinner books are unfillable in any meaningful size)
+- **At least 2 books in the consensus** (single-book "consensus" is one bookmaker's opinion — high uncertainty bars on fair value)
 - **Latest detection per (market, side)** — duplicates collapsed
 
 Even with `?all=1`, signals whose underlying game started **more than
