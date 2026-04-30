@@ -5,19 +5,26 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/cn";
 
-const NAV = [
+interface NavItem {
+  href: string;
+  label: string;
+  adminOnly?: boolean;
+}
+
+const NAV: NavItem[] = [
   { href: "/", label: "Signals" },
   { href: "/clv", label: "CLV" },
-  { href: "/health", label: "Health" },
-  { href: "/settings", label: "Settings" },
+  { href: "/health", label: "Health", adminOnly: true },
+  { href: "/settings", label: "Settings", adminOnly: true },
 ];
 
 
-export default function Nav() {
+export default function Nav({ role }: { role: "user" | "admin" }) {
   const pathname = usePathname();
+  const items = NAV.filter((n) => !n.adminOnly || role === "admin");
   return (
     <nav className="flex items-center gap-1">
-      {NAV.map((n) => {
+      {items.map((n) => {
         const active = n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
         return (
           <Link

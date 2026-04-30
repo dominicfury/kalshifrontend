@@ -1,4 +1,4 @@
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -8,7 +8,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { DataTable, TBody, Td, THead, Th, Tr } from "@/components/ui/data-table";
 import { PageHeader, Section } from "@/components/ui/section";
 import { Stat } from "@/components/ui/stat";
-import { ago, kalshiUrl, num, pct, teamLabel } from "@/lib/format";
+import { ago, num, pct, teamLabel } from "@/lib/format";
 import { fetchSignalDetail } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -86,15 +86,6 @@ export default async function SignalDetailPage({
                   "Walk me through this signal column-by-column. Explain what each number on the row means AND the specific value here, why this is flagged as +EV, exactly how to place the bet on Kalshi, and the biggest risks. Reference the per-book consensus contributions to identify the sharpest sources.",
               }}
             />
-            <a
-              href={kalshiUrl(s.ticker)}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md bg-sky-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-sky-400"
-            >
-              Buy {s.side.toUpperCase()} on Kalshi
-              <ExternalLink className="size-3.5" />
-            </a>
           </div>
         }
       />

@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, Activity, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import { AIChatTrigger } from "@/components/ai/ai-chat";
+import { LandingPage } from "@/components/landing/landing";
 import { AutoRefresh } from "@/components/layout/auto-refresh";
 import RepollButton from "@/components/layout/repoll-button";
 import { SportActivityBar } from "@/components/layout/sport-activity-bar";
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SortHeader } from "@/components/ui/sort-header";
-import { ago, kalshiUrl, num, pct, teamLabel } from "@/lib/format";
+import { ago, num, pct, teamLabel } from "@/lib/format";
 import {
   fetchActiveSports,
   fetchRecentSignals,
@@ -27,6 +28,7 @@ import {
   type SignalSortKey,
   type SportActivity,
 } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/session";
 
 // Filters are URL-driven, so we render on every request rather than ISR.
 export const dynamic = "force-dynamic";
@@ -166,6 +168,13 @@ export default async function SignalsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Logged-out visitors get the marketing landing page; the rest of this
+  // function only runs once auth is established.
+  const me = await getCurrentUser();
+  if (!me) {
+    return <LandingPage />;
+  }
+
   const sp = await searchParams;
   const filters = parseFilters(sp);
   const sort = parseSort(sp);
@@ -373,7 +382,7 @@ export default async function SignalsPage({
                 />
               </Th>
               <Th>Status</Th>
-              <Th>Action</Th>
+              <Th>AI</Th>
             </Tr>
           </THead>
           <TBody>
@@ -447,47 +456,35 @@ export default async function SignalsPage({
                   )}
                 </Td>
                 <Td>
-                  <div className="inline-flex items-center gap-1">
-                    <a
-                      href={kalshiUrl(s.ticker)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-md bg-sky-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm transition-colors hover:bg-sky-400"
-                      title={`Buy ${s.side.toUpperCase()} on Kalshi at ${(s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask).toFixed(3)}`}
-                    >
-                      Buy {s.side.toUpperCase()}
-                      <ExternalLink className="size-3" />
-                    </a>
-                    <AIChatTrigger
-                      variant="icon"
-                      context={{
-                        type: "single_signal",
-                        title: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)} · ${s.market_type.toUpperCase()}${s.line != null ? ` ${s.line}` : ""} ${s.side.toUpperCase()}`,
-                        payload: {
-                          id: s.id,
-                          ticker: s.ticker,
-                          matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
-                          market_type: s.market_type,
-                          line: s.line,
-                          side: s.side,
-                          kalshi_yes_ask: s.kalshi_yes_ask,
-                          kalshi_no_ask: s.kalshi_no_ask,
-                          fair_yes_prob: s.fair_yes_prob,
-                          edge_pct_after_fees: s.edge_pct_after_fees,
-                          edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
-                          yes_book_depth: s.yes_book_depth,
-                          n_books_used: s.n_books_used,
-                          book_staleness_sec: s.book_staleness_sec,
-                          kalshi_staleness_sec: s.kalshi_staleness_sec,
-                          clv_pct: s.clv_pct,
-                          detected_at: s.detected_at,
-                          start_time: s.start_time,
-                        },
-                        seedPrompt:
-                          "Walk me through this signal column-by-column. Explain what each number on the row means AND the specific value here, why this is flagged as +EV, exactly how to place the bet on Kalshi, and the biggest risks.",
-                      }}
-                    />
-                  </div>
+                  <AIChatTrigger
+                    variant="icon"
+                    context={{
+                      type: "single_signal",
+                      title: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)} · ${s.market_type.toUpperCase()}${s.line != null ? ` ${s.line}` : ""} ${s.side.toUpperCase()}`,
+                      payload: {
+                        id: s.id,
+                        ticker: s.ticker,
+                        matchup: `${teamLabel(s.away_team)} @ ${teamLabel(s.home_team)}`,
+                        market_type: s.market_type,
+                        line: s.line,
+                        side: s.side,
+                        kalshi_yes_ask: s.kalshi_yes_ask,
+                        kalshi_no_ask: s.kalshi_no_ask,
+                        fair_yes_prob: s.fair_yes_prob,
+                        edge_pct_after_fees: s.edge_pct_after_fees,
+                        edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
+                        yes_book_depth: s.yes_book_depth,
+                        n_books_used: s.n_books_used,
+                        book_staleness_sec: s.book_staleness_sec,
+                        kalshi_staleness_sec: s.kalshi_staleness_sec,
+                        clv_pct: s.clv_pct,
+                        detected_at: s.detected_at,
+                        start_time: s.start_time,
+                      },
+                      seedPrompt:
+                        "Walk me through this signal column-by-column. Explain what each number on the row means AND the specific value here, why this is flagged as +EV, exactly how to place the bet on Kalshi, and the biggest risks.",
+                    }}
+                  />
                 </Td>
               </Tr>
               );
