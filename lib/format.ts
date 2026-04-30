@@ -104,9 +104,19 @@ export function resolveBet(s: {
   }
 
   if (s.market_type === "total") {
-    const direction = s.side === "yes" ? "Over" : "Under";
+    // Kalshi's totals contracts are ALWAYS named "Over X.5" (our
+    // normalizer enforces this). Show the contract name verbatim plus
+    // the YES/NO suffix — same noun-then-button pattern as moneyline.
+    //
+    // Don't be tempted to flip the description to "Under X.5" on no-side
+    // signals: users read predicates like "Under" as something to be
+    // negated by NO, then mentally invert twice and arrive at Over —
+    // the wrong answer. Keeping the contract name fixed and letting
+    // YES/NO mean "which button" matches the moneyline pattern they
+    // already parse correctly, AND matches what they'll see when they
+    // click through to Kalshi.
     const line = s.line ?? 0;
-    return `${direction} ${line} · ${yesNo}`;
+    return `Over ${line} · ${yesNo}`;
   }
 
   if (
