@@ -6,7 +6,7 @@ const FIELD_DEFS: Array<{
   key: string;
   label: string;
   hint: string;
-  unit: "sec" | "count";
+  unit: "sec" | "count" | "toggle";
 }> = [
   {
     key: "kalshi_poll_interval_sec",
@@ -40,6 +40,50 @@ const FIELD_DEFS: Array<{
   },
 ];
 
+const SPORT_FIELD_DEFS: Array<{
+  key: string;
+  label: string;
+  hint: string;
+  unit: "toggle";
+}> = [
+  {
+    key: "sport_enabled_nhl",
+    label: "NHL",
+    hint: "Off = stop polling NHL odds and hide from the active bar.",
+    unit: "toggle",
+  },
+  {
+    key: "sport_enabled_nba",
+    label: "NBA",
+    hint: "Off = stop polling NBA odds and hide from the active bar.",
+    unit: "toggle",
+  },
+  {
+    key: "sport_enabled_mlb",
+    label: "MLB",
+    hint: "Off = stop polling MLB odds and hide from the active bar.",
+    unit: "toggle",
+  },
+  {
+    key: "sport_enabled_wnba",
+    label: "WNBA",
+    hint: "Off = stop polling WNBA odds and hide from the active bar.",
+    unit: "toggle",
+  },
+  {
+    key: "sport_enabled_tennis_atp",
+    label: "ATP (men's tennis)",
+    hint: "Off = skip ATP tournament discovery and hide from the active bar.",
+    unit: "toggle",
+  },
+  {
+    key: "sport_enabled_tennis_wta",
+    label: "WTA (women's tennis)",
+    hint: "Off = skip WTA tournament discovery and hide from the active bar.",
+    unit: "toggle",
+  },
+];
+
 export async function SystemConfigCard() {
   const rows = await listConfig();
   const byKey = new Map(rows.map((r) => [r.key, r]));
@@ -50,5 +94,28 @@ export async function SystemConfigCard() {
     unit: d.unit,
     value: byKey.get(d.key)?.value ?? "",
   }));
-  return <SystemConfigEditor fields={fields} />;
+  const sportFields = SPORT_FIELD_DEFS.map((d) => ({
+    key: d.key,
+    label: d.label,
+    hint: d.hint,
+    unit: d.unit,
+    // Default to "1" for unseeded rows so a fresh DB doesn't render the
+    // toggle as off before the backend's seed_defaults_if_missing runs.
+    value: byKey.get(d.key)?.value ?? "1",
+  }));
+  return (
+    <div className="space-y-6">
+      <SystemConfigEditor fields={fields} />
+      <div className="space-y-2">
+        <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-300">
+          Sports — toggle on/off
+        </div>
+        <p className="text-[11px] leading-snug text-zinc-500">
+          Disabled sports are skipped by the Odds API poller and hidden from
+          the active-sports bar above the table.
+        </p>
+        <SystemConfigEditor fields={sportFields} />
+      </div>
+    </div>
+  );
 }

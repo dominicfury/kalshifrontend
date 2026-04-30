@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { z } from "zod";
 
 import { getDb } from "./db";
+import { getInt, KNOWN_KEYS } from "./system-config";
 
 
 // Helpers — libsql returns numbers as JS numbers, but bigints in some envs
@@ -493,7 +494,7 @@ const SPORT_SOON_HOURS = 24;    // game in next 24h → 🟡 (signals coming)
 export const fetchSportActivity = unstable_cache(
   _fetchSportActivityImpl,
   ["fetch-sport-activity-v1"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: ["sport-activity"] },
 );
 
 async function _fetchSportActivityImpl(): Promise<SportActivity[]> {
@@ -526,6 +527,20 @@ async function _fetchSportActivityImpl(): Promise<SportActivity[]> {
     };
   });
 
+  // Per-sport admin toggles. Default 1 (enabled) when the row is missing
+  // so a fresh DB shows everything until the admin opts out.
+  const enabled = new Map<string, number>([
+    ["nhl", await getInt(KNOWN_KEYS.SPORT_ENABLED_NHL, 1)],
+    ["nba", await getInt(KNOWN_KEYS.SPORT_ENABLED_NBA, 1)],
+    ["mlb", await getInt(KNOWN_KEYS.SPORT_ENABLED_MLB, 1)],
+    ["wnba", await getInt(KNOWN_KEYS.SPORT_ENABLED_WNBA, 1)],
+    ["tennis_atp", await getInt(KNOWN_KEYS.SPORT_ENABLED_TENNIS_ATP, 1)],
+    ["tennis_wta", await getInt(KNOWN_KEYS.SPORT_ENABLED_TENNIS_WTA, 1)],
+  ]);
+
+  // Drop rows for sports the admin has switched off.
+  const visible = rows.filter((r) => (enabled.get(r.sport) ?? 1) === 1);
+
   // Backfill the sports we support but have no upcoming events for so the
   // dashboard shows them as 'dark' rather than hiding them entirely (silence
   // tells you "off-season / off-day," not "we forgot about this sport").
@@ -534,17 +549,17 @@ async function _fetchSportActivityImpl(): Promise<SportActivity[]> {
   // them into the polling list, so tennis_atp / tennis_wta appear here
   // when there's a live tournament running.
   const known = ["nhl", "nba", "mlb", "wnba", "tennis_atp", "tennis_wta"];
-  const seen = new Set(rows.map((r) => r.sport));
+  const seen = new Set(visible.map((r) => r.sport));
   for (const sport of known) {
-    if (!seen.has(sport)) {
-      rows.push({ sport, status: "dark", next_event_in_hours: null, events_24h: 0 });
+    if (!seen.has(sport) && (enabled.get(sport) ?? 1) === 1) {
+      visible.push({ sport, status: "dark", next_event_in_hours: null, events_24h: 0 });
     }
   }
 
   // Sort: live → soon → dark, then alphabetical within each.
   const order: Record<SportActivityStatus, number> = { live: 0, soon: 1, dark: 2 };
-  rows.sort((a, b) => order[a.status] - order[b.status] || a.sport.localeCompare(b.sport));
-  return rows;
+  visible.sort((a, b) => order[a.status] - order[b.status] || a.sport.localeCompare(b.sport));
+  return visible;
 }
 
 
