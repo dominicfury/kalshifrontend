@@ -6,6 +6,7 @@ import {
   AUTH_COOKIE_MAX_AGE,
   signToken,
 } from "@/lib/auth";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
   findUserByUsername,
   logActivity,
@@ -16,6 +17,14 @@ import {
 // Node runtime — bcryptjs is not Edge-compatible, and this route hashes/
 // compares passwords. Middleware runs on Edge and only verifies JWTs.
 export const runtime = "nodejs";
+
+// Rate limits: 10 login attempts per IP per 15 min and 8 attempts per
+// username per 15 min. Per-username gives extra cover when an attacker
+// rotates IPs to credential-stuff a single user; per-IP catches the
+// inverse case (one IP guessing across many usernames).
+const LOGIN_IP_MAX = 10;
+const LOGIN_USER_MAX = 8;
+const LOGIN_WINDOW_SEC = 15 * 60;
 
 export async function POST(req: Request) {
   let body: { username?: string; password?: string };
@@ -30,18 +39,48 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "username and password required" }, { status: 400 });
   }
 
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    req.headers.get("x-real-ip") ||
-    null;
+  const ip = getClientIp(req);
   const ua = req.headers.get("user-agent") || null;
+
+  // IP-bound limiter — runs before bcrypt so an attacker spamming us
+  // can't burn CPU. Username-bound limiter runs after we identify the
+  // user (or against the supplied username if we don't, to slow
+  // enumeration of valid accounts).
+  if (ip) {
+    const rl = await checkRateLimit({
+      bucket: "login:ip",
+      key: ip,
+      max: LOGIN_IP_MAX,
+      windowSec: LOGIN_WINDOW_SEC,
+    });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "too many attempts, try again later" },
+        { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
+      );
+    }
+  }
+
+  const userKey = username.toLowerCase();
+  const rlUser = await checkRateLimit({
+    bucket: "login:user",
+    key: userKey,
+    max: LOGIN_USER_MAX,
+    windowSec: LOGIN_WINDOW_SEC,
+  });
+  if (!rlUser.allowed) {
+    return NextResponse.json(
+      { error: "too many attempts, try again later" },
+      { status: 429, headers: { "Retry-After": String(rlUser.retryAfterSec) } },
+    );
+  }
 
   let user;
   try {
     user = await findUserByUsername(username);
-  } catch (e) {
+  } catch {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "auth lookup failed" },
+      { error: "auth lookup failed" },
       { status: 500 },
     );
   }
@@ -65,14 +104,11 @@ export async function POST(req: Request) {
   try {
     token = await signToken({ sub: user.id, username: user.username, role: user.role });
   } catch (e) {
-    // Most likely: JWT_SECRET missing or shorter than 16 chars on Vercel.
+    // Most likely: JWT_SECRET missing or below the minimum length on Vercel.
+    // Don't leak the underlying error to the client; log server-side.
+    console.error("login: signToken failed:", e);
     return NextResponse.json(
-      {
-        error:
-          "auth_token signing failed — check JWT_SECRET env var on Vercel " +
-          "(must be ≥16 chars; generate with `openssl rand -base64 64`)",
-        detail: e instanceof Error ? e.message : String(e),
-      },
+      { error: "internal authentication error" },
       { status: 500 },
     );
   }

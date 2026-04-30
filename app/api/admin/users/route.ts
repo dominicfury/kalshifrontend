@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireAdmin } from "@/lib/session";
+import { isSameOrigin, requireAdmin } from "@/lib/session";
 import { createUser, listUsers } from "@/lib/users";
 
 export const runtime = "nodejs";
@@ -13,6 +13,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (!isSameOrigin(req)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 

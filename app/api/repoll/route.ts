@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, isSameOrigin } from "@/lib/session";
 import { logActivity } from "@/lib/users";
 
 export const runtime = "nodejs";
@@ -21,8 +21,11 @@ function jsonError(status: number, message: string, extra: Record<string, unknow
 //
 // Auth: admin-only. Non-admin users get a friendly 403; the button is
 // also hidden in their nav so they shouldn't reach this in normal use.
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    if (!isSameOrigin(req)) {
+      return jsonError(403, "forbidden");
+    }
     const me = await getCurrentUser();
     if (!me) return jsonError(401, "not signed in");
     if (me.role !== "admin") {
@@ -66,11 +69,10 @@ export async function POST() {
         cache: "no-store",
       });
     } catch (e) {
-      return jsonError(
-        502,
-        e instanceof Error ? e.message : "fetch failed",
-        { backend: backendUrl },
-      );
+      // Don't echo `e.message` — it leaks the backend hostname/port via
+      // ECONNREFUSED-style errors. Log server-side, return generic.
+      console.error("repoll: upstream fetch failed:", e);
+      return jsonError(502, "upstream unreachable");
     }
 
     // Best-effort log so the admin sees their own repolls in /settings.
@@ -93,18 +95,23 @@ export async function POST() {
     }
 
     // Upstream returned non-JSON (Railway 502 HTML, Vercel timeout HTML,
-    // Cloudflare error page, etc.). Wrap it so the client can render it.
-    const trimmed = text.length > 1500 ? text.slice(0, 1500) + "…" : text;
+    // Cloudflare error page, etc.). Log the body+URL server-side for
+    // debugging but don't ship them in the response — the upstream URL
+    // contains the Railway hostname and the body could leak stack traces.
+    if (text) {
+      console.error("repoll: upstream non-JSON response", {
+        status: r.status,
+        url: `${backendUrl}/repoll`,
+        body_preview: text.slice(0, 500),
+      });
+    }
     return jsonError(
       r.status >= 400 ? r.status : 502,
       `upstream returned non-JSON (HTTP ${r.status})`,
-      { upstream_body: trimmed, upstream_url: `${backendUrl}/repoll` },
     );
   } catch (e) {
-    // Anything else — return JSON so the client error display works.
-    return jsonError(
-      500,
-      e instanceof Error ? `proxy error: ${e.message}` : "proxy error",
-    );
+    // Anything else — log server-side, return generic to client.
+    console.error("repoll: proxy error:", e);
+    return jsonError(500, "proxy error");
   }
 }

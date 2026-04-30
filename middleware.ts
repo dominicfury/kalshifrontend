@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { AUTH_COOKIE, verifyToken } from "@/lib/auth";
+import { AUTH_COOKIE, safeRedirectPath, verifyToken } from "@/lib/auth";
 
 // Routes that don't require auth at all. Login + signup pages, the
 // auth API, and the landing page (renders different content based on
@@ -84,9 +84,16 @@ export async function middleware(req: NextRequest) {
 function redirectToLogin(req: NextRequest): NextResponse {
   const url = req.nextUrl.clone();
   url.pathname = "/login";
-  // Preserve where they were trying to go so login can bounce back.
-  if (req.nextUrl.pathname !== "/") {
-    url.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
+  // Preserve where they were trying to go so login can bounce back. The
+  // value is sourced from req.nextUrl which is server-controlled, but we
+  // still pass it through safeRedirectPath as defense in depth — a future
+  // change that interpolates user input into nextUrl wouldn't open a hole.
+  const intended = safeRedirectPath(
+    req.nextUrl.pathname + req.nextUrl.search,
+    "",
+  );
+  if (intended && intended !== "/") {
+    url.searchParams.set("next", intended);
   } else {
     url.search = "";
   }

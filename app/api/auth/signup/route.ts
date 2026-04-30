@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
 
 import { sendEmail, verificationEmail } from "@/lib/email";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { verifyTurnstile } from "@/lib/turnstile";
 import {
   createUser,
   findUserByEmail,
   findUserByUsername,
-  setEmailVerificationCode,
 } from "@/lib/users";
 
 export const runtime = "nodejs";
+
+// Per-IP signup limit — caps disposable account creation and protects the
+// Resend email quota from a misbehaving client.
+const SIGNUP_IP_MAX = 5;
+const SIGNUP_IP_WINDOW_SEC = 60 * 60;          // 1 hour
+const SIGNUP_EMAIL_MAX = 1;
+const SIGNUP_EMAIL_WINDOW_SEC = 24 * 60 * 60;  // 1 day per email
 
 function generateCode(): string {
   // 6-digit zero-padded numeric code
@@ -63,13 +70,40 @@ export async function POST(req: Request) {
   }
 
   // CAPTCHA — block before doing any DB or email work
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    req.headers.get("x-real-ip") ||
-    null;
+  const ip = getClientIp(req);
   const cap = await verifyTurnstile(captcha_token, ip);
   if (!cap.ok) {
     return NextResponse.json({ error: cap.error }, { status: 400 });
+  }
+
+  // Rate limits — applied after CAPTCHA so we don't waste limiter budget
+  // on bot traffic. Per-IP throttles aggregate signup spam; per-email
+  // makes "create 100 accounts on the same address" infeasible.
+  if (ip) {
+    const ipRl = await checkRateLimit({
+      bucket: "signup:ip",
+      key: ip,
+      max: SIGNUP_IP_MAX,
+      windowSec: SIGNUP_IP_WINDOW_SEC,
+    });
+    if (!ipRl.allowed) {
+      return NextResponse.json(
+        { error: "too many signups from this network, try again later" },
+        { status: 429, headers: { "Retry-After": String(ipRl.retryAfterSec) } },
+      );
+    }
+  }
+  const emailRl = await checkRateLimit({
+    bucket: "signup:email",
+    key: email,
+    max: SIGNUP_EMAIL_MAX,
+    windowSec: SIGNUP_EMAIL_WINDOW_SEC,
+  });
+  if (!emailRl.allowed) {
+    return NextResponse.json(
+      { error: "this email already requested a signup recently" },
+      { status: 429, headers: { "Retry-After": String(emailRl.retryAfterSec) } },
+    );
   }
 
   // Uniqueness checks (case-insensitive). We don't disclose which is taken

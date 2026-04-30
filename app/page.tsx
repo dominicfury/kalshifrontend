@@ -16,6 +16,8 @@ import {
   Th,
   Tr,
 } from "@/components/ui/data-table";
+import { FreshnessPill } from "@/components/ui/freshness-pill";
+import { SignalAnnouncer } from "@/components/ui/signal-announcer";
 import { SortHeader } from "@/components/ui/sort-header";
 import { num, pct, resolveBet, teamLabel } from "@/lib/format";
 import {
@@ -117,46 +119,6 @@ function timeToStartCell(min: number | null) {
 }
 
 
-// Treat a signal as "fresh" if detected within the last 5 minutes of
-// server-render time. AutoRefresh re-renders the page every 60s so the
-// badge naturally clears as rows age out.
-function isFreshSignal(detectedAt: string): boolean {
-  const iso = detectedAt.endsWith("Z") || detectedAt.includes("+")
-    ? detectedAt
-    : `${detectedAt}Z`;
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return false;
-  return Date.now() - t < 5 * 60_000;
-}
-
-
-/** Live freshness pill — answers "is this market being actively polled
- * RIGHT NOW?" using kalshi_quotes.polled_at joined at query time, not the
- * stored kalshi_staleness_sec snapshot. Tone scales with quote age:
- * 🟢 ≤60s, 🟡 60–300s, 🔴 >5min. The Live filter rejects rows older than
- * 3 min, so the red state only shows in ?all=1 mode. */
-function freshnessPill(ageSec: number | null, fresh: boolean) {
-  if (ageSec == null) {
-    return <span className="text-zinc-500 text-xs">—</span>;
-  }
-  let tone = "text-emerald-400";
-  if (ageSec >= 60) tone = "text-amber-300";
-  if (ageSec >= 300) tone = "text-rose-300";
-  const label = ageSec < 60 ? `${ageSec}s` : `${Math.round(ageSec / 60)}m`;
-  return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-      <span className={`inline-flex items-center gap-1 ${tone}`}>
-        <span className="size-1.5 rounded-full bg-current" />
-        <span className="font-mono tabular-nums text-xs">{label}</span>
-      </span>
-      {fresh && (
-        <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300 ring-1 ring-emerald-500/40">
-          NEW
-        </span>
-      )}
-    </span>
-  );
-}
 
 
 function parseFilters(sp: Record<string, string | string[] | undefined>): SignalFilters {
@@ -359,6 +321,12 @@ export default async function SignalsPage({
 
   const isAdmin = me.role === "admin";
   const showAll = !!filters.showAll;
+  // Anchor client-side freshness ticks to the moment this server payload was
+  // built. Without this anchor, "5s old" stays "5s old" until the next refresh.
+  // Date.now() is fine here — this runs on the server during SSR, not in a
+  // React render path the purity linter cares about.
+  // eslint-disable-next-line react-hooks/purity
+  const serverNowMs = Date.now();
 
   const positiveClv = signals.filter((s) => s.clv_pct != null && s.clv_pct > 0).length;
   const withClv = signals.filter((s) => s.clv_pct != null).length;
@@ -405,8 +373,15 @@ export default async function SignalsPage({
         <LiveEmptyState stats={liveStats} filters={filters} />
       )}
 
+      <SignalAnnouncer
+        latestId={signals.length > 0 ? Math.max(...signals.map((s) => s.id)) : null}
+      />
+
       {signals.length > 0 && (
-        <DataTable>
+        <DataTable
+          aria-label="Live signal table"
+          role="region"
+        >
           <THead>
             <Tr>
               {/* Live freshness — replaces the old "When" column. Always shown. */}
@@ -537,7 +512,6 @@ export default async function SignalsPage({
                 : isHugeEdge
                   ? "bg-amber-950/20"
                   : "";
-              const fresh = isFreshSignal(s.detected_at);
               const price = s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask;
               const fair =
                 s.side === "yes" ? s.fair_yes_prob : 1 - s.fair_yes_prob;
@@ -553,7 +527,11 @@ export default async function SignalsPage({
                       className="hover:opacity-80"
                       title={`Detected ${s.detected_at}`}
                     >
-                      {freshnessPill(s.live_quote_age_sec, fresh)}
+                      <FreshnessPill
+                        ageSec={s.live_quote_age_sec}
+                        detectedAt={s.detected_at}
+                        serverNowMs={serverNowMs}
+                      />
                     </Link>
                   </Td>
                   <Td>{timeToStartCell(s.time_to_start_min)}</Td>
@@ -565,7 +543,8 @@ export default async function SignalsPage({
                   <Td>
                     <Link
                       href={`/signals/${s.id}`}
-                      className="hover:text-zinc-50 whitespace-nowrap"
+                      title={matchupLabel(s)}
+                      className="hover:text-zinc-50 block max-w-[14rem] truncate sm:max-w-[20rem] sm:whitespace-nowrap md:max-w-none"
                     >
                       {matchupLabel(s)}
                     </Link>

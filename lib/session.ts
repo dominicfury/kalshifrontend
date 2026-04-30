@@ -28,6 +28,46 @@ export async function requireAdmin(): Promise<UserClaims | null> {
   return u && u.role === "admin" ? u : null;
 }
 
+
+/**
+ * Same-origin check for state-changing admin requests. Defense in depth on
+ * top of the sameSite=lax cookie: a misconfigured browser, an extension, or
+ * a future cookie-policy change shouldn't be the only thing standing
+ * between a logged-in admin and a CSRF on /api/admin/*. Returns true when
+ * the Origin header matches the request host (or, for environments behind
+ * a proxy, the X-Forwarded-Host).
+ *
+ * Use as: `if (!isSameOrigin(req)) return NextResponse.json(...403)`.
+ */
+export function isSameOrigin(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) {
+    // Modern browsers always send Origin on cross-origin AND same-origin
+    // POST/PATCH/DELETE. Missing Origin on a mutating request is suspicious
+    // — block it. (GET requests can have null Origin and aren't covered
+    // by this helper anyway.)
+    return false;
+  }
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host.toLowerCase();
+  } catch {
+    return false;
+  }
+  // Prefer X-Forwarded-Host when present (Vercel/Railway), since the
+  // request URL inside a Node runtime can reflect the internal hostname.
+  const fwdHost = req.headers.get("x-forwarded-host")?.toLowerCase();
+  const reqHost = (() => {
+    try {
+      return new URL(req.url).host.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+  const expected = fwdHost || reqHost;
+  return !!expected && originHost === expected;
+}
+
 export type TrialState =
   | { kind: "guest" }              // not logged in
   | { kind: "admin"; user: UserRow }
