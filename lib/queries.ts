@@ -741,6 +741,65 @@ export async function fetchClvByCategory(): Promise<ClvByCategory[]> {
   });
 }
 
+/** Breakdown of currently-unmatched Kalshi markets, grouped by what
+ * they ARE so the gap is diagnosable.
+ *
+ * The cumulative `unmatched_kalshi_markets` table logs one row per
+ * (market, reason) per day, so its size grows roughly linearly even
+ * when nothing's wrong (any market without book coverage adds ~1 row
+ * per day, forever). What actually matters is "which Kalshi markets
+ * have NO matched book pair right now" — this query answers that. */
+export interface UnmatchedBreakdownRow {
+  sport: string;
+  market_type: string;
+  period: string;
+  n_markets: number;
+  sample_ticker: string | null;
+}
+
+export async function fetchUnmatchedBreakdown(): Promise<UnmatchedBreakdownRow[]> {
+  const db = getDb();
+  // A market is "currently unmatched" if it's active, pre-game, AND no
+  // book quote exists for the same (event, market_type, period, line)
+  // covering both sides of the devig pair. We approximate via an
+  // anti-join on book_markets — any book row at all means we'd at
+  // least try to match. (Imperfect: a one-sided book row would still
+  // fail the matcher's PAIRS check, but it's a good enough first cut.)
+  const r = await db.execute(`
+    SELECT
+      e.sport,
+      km.market_type,
+      km.period,
+      COUNT(*) AS n_markets,
+      MIN(km.ticker) AS sample_ticker
+    FROM kalshi_markets km
+    JOIN events e ON e.id = km.event_id
+    WHERE km.status = 'active'
+      AND e.start_time > datetime('now')
+      AND NOT EXISTS (
+        SELECT 1 FROM book_markets bm
+        WHERE bm.event_id = km.event_id
+          AND bm.market_type = km.market_type
+          AND bm.period = km.period
+          AND COALESCE(bm.line, -9999) = COALESCE(km.line, -9999)
+      )
+    GROUP BY e.sport, km.market_type, km.period
+    ORDER BY n_markets DESC
+    LIMIT 30
+  `);
+  return r.rows.map((row) => {
+    const o = row as unknown as Record<string, unknown>;
+    return {
+      sport: String(o.sport),
+      market_type: String(o.market_type),
+      period: String(o.period),
+      n_markets: Number(o.n_markets) || 0,
+      sample_ticker: o.sample_ticker == null ? null : String(o.sample_ticker),
+    };
+  });
+}
+
+
 export interface ApiStatusRow {
   api: string;
   last_success_at: string | null;
@@ -779,7 +838,13 @@ export interface HealthSnapshot {
   signals_resolved: number;
   signals_with_clv: number;
   signals_alerted: number;
-  unmatched_kalshi_count: number;
+  // "Currently unmatched" — pre-game active Kalshi markets with NO
+  // book_markets row at the same (event, market_type, period, line).
+  // The number that actually matters for matcher coverage. The
+  // log table version (`unmatched_kalshi_count_cumulative`) grows
+  // forever even when nothing's wrong.
+  unmatched_kalshi_now: number;
+  unmatched_kalshi_count_cumulative: number;
   signal_anomalies_count: number;
   events_active: number;
   active_kalshi_markets: number;
@@ -787,7 +852,7 @@ export interface HealthSnapshot {
 
 export async function fetchHealth(): Promise<HealthSnapshot> {
   const db = getDb();
-  const [k, b, s, e, m, a, an, anom] = await Promise.all([
+  const [k, b, s, e, m, a, anomalies, unmatchedNow] = await Promise.all([
     db.execute("SELECT MAX(polled_at) FROM kalshi_quotes"),
     db.execute("SELECT MAX(polled_at) FROM book_quotes"),
     db.execute(`
@@ -803,10 +868,23 @@ export async function fetchHealth(): Promise<HealthSnapshot> {
     db.execute(`SELECT COUNT(*) FROM kalshi_markets WHERE status = 'active'`),
     db.execute(`SELECT COUNT(*) FROM unmatched_kalshi_markets`),
     db.execute(`SELECT COUNT(*) FROM signal_anomalies`),
-    db.execute(`SELECT COUNT(*) FROM signal_anomalies`),
+    db.execute(`
+      SELECT COUNT(*) AS n
+      FROM kalshi_markets km
+      JOIN events e ON e.id = km.event_id
+      WHERE km.status = 'active'
+        AND e.start_time > datetime('now')
+        AND NOT EXISTS (
+          SELECT 1 FROM book_markets bm
+          WHERE bm.event_id = km.event_id
+            AND bm.market_type = km.market_type
+            AND bm.period = km.period
+            AND COALESCE(bm.line, -9999) = COALESCE(km.line, -9999)
+        )
+    `),
   ]);
-  void anom;
   const sRow = s.rows[0] as unknown as Record<string, unknown>;
+  const unRow = unmatchedNow.rows[0] as unknown as Record<string, unknown>;
   return {
     last_kalshi_poll: (k.rows[0] as unknown as Record<string, unknown>)["MAX(polled_at)"] as
       | string
@@ -821,7 +899,10 @@ export async function fetchHealth(): Promise<HealthSnapshot> {
     signals_alerted: Number(sRow.alerted) || 0,
     events_active: Number((e.rows[0] as unknown as Record<string, unknown>)["COUNT(*)"]) || 0,
     active_kalshi_markets: Number((m.rows[0] as unknown as Record<string, unknown>)["COUNT(*)"]) || 0,
-    unmatched_kalshi_count: Number((a.rows[0] as unknown as Record<string, unknown>)["COUNT(*)"]) || 0,
-    signal_anomalies_count: Number((an.rows[0] as unknown as Record<string, unknown>)["COUNT(*)"]) || 0,
+    unmatched_kalshi_count_cumulative:
+      Number((a.rows[0] as unknown as Record<string, unknown>)["COUNT(*)"]) || 0,
+    unmatched_kalshi_now: Number(unRow.n) || 0,
+    signal_anomalies_count:
+      Number((anomalies.rows[0] as unknown as Record<string, unknown>)["COUNT(*)"]) || 0,
   };
 }

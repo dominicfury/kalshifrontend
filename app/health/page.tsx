@@ -2,11 +2,19 @@ import { AlertTriangle, Database, Mail, Network } from "lucide-react";
 
 import { AutoRefresh } from "@/components/layout/auto-refresh";
 import { Card, CardBody } from "@/components/ui/card";
+import {
+  DataTable,
+  TBody,
+  Td,
+  THead,
+  Th,
+  Tr,
+} from "@/components/ui/data-table";
 import { PageHeader, Section } from "@/components/ui/section";
 import { Stat } from "@/components/ui/stat";
 import { StatusDot } from "@/components/ui/status-dot";
 import { ago } from "@/lib/format";
-import { fetchHealth } from "@/lib/queries";
+import { fetchHealth, fetchUnmatchedBreakdown } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +46,13 @@ const TONE_TEXT_CLASS = {
 
 export default async function HealthPage() {
   let h = null;
+  let unmatched: Awaited<ReturnType<typeof fetchUnmatchedBreakdown>> = [];
   let error: string | null = null;
   try {
-    h = await fetchHealth();
+    [h, unmatched] = await Promise.all([
+      fetchHealth(),
+      fetchUnmatchedBreakdown(),
+    ]);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -101,35 +113,96 @@ export default async function HealthPage() {
           <Section
             eyebrow="matcher"
             title="Coverage"
-            description="Unmatched markets indicate normalizer bugs. Anomalies are signals that fired but tripped a sanity-check rule."
+            description={
+              <>
+                <span className="block">
+                  <strong className="text-zinc-200">Unmatched now</strong> is
+                  the count of currently active, pre-game Kalshi markets with
+                  no book row at the same (event, market_type, period, line).
+                  Some baseline is normal — Kalshi has period totals,
+                  intermission props, and tournament tennis that books don&apos;t
+                  cover. Drill down via the breakdown below to see which
+                  buckets are driving it.
+                </span>
+                <span className="block mt-2 text-zinc-500">
+                  The "Logged (cumulative)" number is the
+                  unmatched_kalshi_markets table — one row per (market,
+                  reason) per day, retained forever — useful for trends but
+                  not health.
+                </span>
+              </>
+            }
           >
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <Stat label="Active markets" value={h.active_kalshi_markets} />
               <Stat label="Events (24h)" value={h.events_active} tone="muted" />
               <Stat
-                label="Unmatched"
-                value={h.unmatched_kalshi_count}
+                label="Unmatched now"
+                value={h.unmatched_kalshi_now}
                 tone={
-                  h.unmatched_kalshi_count > 5
+                  h.active_kalshi_markets > 0 &&
+                  h.unmatched_kalshi_now / h.active_kalshi_markets > 0.5
                     ? "warning"
-                    : h.unmatched_kalshi_count === 0
+                    : h.unmatched_kalshi_now === 0
                       ? "positive"
                       : "muted"
                 }
                 icon={
-                  h.unmatched_kalshi_count > 5 ? (
+                  h.active_kalshi_markets > 0 &&
+                  h.unmatched_kalshi_now / h.active_kalshi_markets > 0.5 ? (
                     <AlertTriangle className="size-3" />
                   ) : undefined
                 }
               />
               <Stat
+                label="Logged (cumulative)"
+                value={h.unmatched_kalshi_count_cumulative}
+                tone="muted"
+              />
+              <Stat
                 label="Anomalies"
                 value={h.signal_anomalies_count}
-                tone={
-                  h.signal_anomalies_count > 0 ? "warning" : "positive"
-                }
+                tone={h.signal_anomalies_count > 0 ? "warning" : "positive"}
               />
             </div>
+
+            {unmatched.length > 0 && (
+              <div className="mt-4">
+                <div className="mb-2 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                  Unmatched breakdown · top {unmatched.length}
+                </div>
+                <DataTable>
+                  <THead>
+                    <Tr>
+                      <Th>Sport</Th>
+                      <Th>Market type</Th>
+                      <Th>Period</Th>
+                      <Th align="right">Markets</Th>
+                      <Th>Sample ticker</Th>
+                    </Tr>
+                  </THead>
+                  <TBody>
+                    {unmatched.map((u, idx) => (
+                      <Tr
+                        key={`${u.sport}-${u.market_type}-${u.period}-${idx}`}
+                      >
+                        <Td mono>{u.sport.toUpperCase()}</Td>
+                        <Td>{u.market_type}</Td>
+                        <Td muted>{u.period}</Td>
+                        <Td align="right" mono>
+                          {u.n_markets}
+                        </Td>
+                        <Td muted>
+                          <span className="font-mono text-xs">
+                            {u.sample_ticker ?? "—"}
+                          </span>
+                        </Td>
+                      </Tr>
+                    ))}
+                  </TBody>
+                </DataTable>
+              </div>
+            )}
           </Section>
         </>
       )}
