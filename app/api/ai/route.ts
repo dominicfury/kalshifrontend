@@ -43,21 +43,28 @@ Prices are also fractions of $1: kalshi_yes_ask = 0.880 means $0.88 per contract
 
 Each Kalshi market is "Did [specific team or outcome] hit?" — YES/NO are which side of THAT contract you'd buy. To translate a signal into a concrete bet ("buy Lakers ML at $0.38"), use these PRE-RESOLVED fields when present:
 
-- **bet**: A complete plain-English bet description (e.g. "Lakers ML", "Over 6.5", "Tampa Bay -1.5"). Use this verbatim — DO NOT re-derive from market_type + market_side + side + line.
-- **action**: The exact instruction to give the user (e.g. "Buy YES on Kalshi at $0.380"). Quote this verbatim in your "How to place the bet" section.
+- **bet**: The Kalshi CONTRACT name + button (e.g. "Lakers ML · NO", "Over 6.5 · YES", "Alcaraz · NO"). The team or player named is whichever side Kalshi placed the contract on, NOT necessarily the +EV side. NO inverts to the opposite outcome.
+- **action**: The exact instruction to give the user (e.g. "Buy NO on Kalshi at $0.620"). Quote this verbatim in your "How to place the bet" section.
 
-If those fields are missing, fall back to the raw mapping:
-- moneyline + market_side='home' + side='yes' → bet HOME team to win
-- moneyline + market_side='home' + side='no' → bet AWAY team to win (NO on the home market = home loses)
-- moneyline + market_side='away' + side='yes' → bet AWAY team to win
-- moneyline + market_side='away' + side='no' → bet HOME team to win
-- total + side='yes' → bet OVER the line (Kalshi totals are always YES = Over)
-- total + side='no' → bet UNDER the line
-- spread/puckline + market_side='home' + side='yes' → home covers their stored line
-- spread/puckline + market_side='home' + side='no' → away covers (line flips sign)
-- spread/puckline + market_side='away' + side='yes' → away covers (away's actual line is opposite of stored home-perspective line)
+CRITICAL: when the bet ends in "· NO", explain BOTH the contract and the inversion. Examples:
+- "Lakers ML · NO" → "Click NO on Kalshi's Lakers moneyline contract. NO pays out if Lakers DON'T win — i.e. you're betting on the Rockets."
+- "Over 213.5 · NO" → "Click NO on Kalshi's Over 213.5 contract. NO pays out if the total does NOT go over 213.5 — i.e. you're betting Under."
+- "Alcaraz · NO" → "Click NO on Kalshi's Alcaraz match-winner contract. NO pays out if Alcaraz LOSES — i.e. you're betting on his opponent."
 
-NEVER tell the user "buy ML YES" without naming the actual team. NEVER tell them "buy TOTAL 6.5 NO" without naming Over or Under.
+NEVER mash "ML NO" or "TOTAL NO" without spelling out who/what is actually winning under that side.
+
+If the bet field is missing, derive from the raw mapping:
+- moneyline + market_side='home' + side='yes' → home team wins
+- moneyline + market_side='home' + side='no' → away team wins
+- moneyline + market_side='away' + side='yes' → away team wins
+- moneyline + market_side='away' + side='no' → home team wins
+- total + side='yes' → over the line (Kalshi totals are always YES = Over)
+- total + side='no' → under the line
+- spread/puckline + market_side='home' + side='yes' → home covers stored line
+- spread/puckline + market_side='home' + side='no' → home does NOT cover (= away covers the flipped line)
+- spread/puckline + market_side='away' + side='yes' → away covers stored line
+- match_winner + market_side='home' + side='yes' → home player wins
+- match_winner + market_side='home' + side='no' → home player loses (= other player wins)
 
 ## Column glossary (every single-signal explanation should use these)
 

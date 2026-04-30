@@ -70,6 +70,35 @@ export function teamLabel(slug: string): string {
  * tells you WHAT you're betting on; the YES/NO suffix tells you WHICH
  * Kalshi button to click on the contract page.
  */
+/** Render the bet description as Kalshi's contract name + which button.
+ *
+ * The unifying principle: ALWAYS describe what Kalshi shows you, never
+ * flip the description to the +EV outcome. The YES/NO suffix tells you
+ * which button to click; mentally inverting NO once gives you the bet
+ * outcome. Same parse pattern across every market type — and the row
+ * label exactly matches the contract title you'll see when you click
+ * through to Kalshi.
+ *
+ * Why this matters (totals example):
+ *   Kalshi's contract is "Over 213.5". side=NO is +EV.
+ *     - "Under 213.5 · NO"  (old flipping behavior)
+ *         User parses "Under" as a predicate, NO inverts it back to
+ *         "Over." Wrong answer. Also "Under 213.5" doesn't exist as
+ *         a contract on Kalshi — confusing on click-through.
+ *     - "Over 213.5 · NO"  (current)
+ *         User parses "Over 213.5" as the contract noun, NO as the
+ *         button. NO of "score is over" = score is under. Correct.
+ *
+ * Same logic for moneyline / spread / match_winner: the team or player
+ * named is whichever side Kalshi placed the contract on (market_side),
+ * NOT the +EV side. The action of clicking NO inverts to the opposite
+ * outcome.
+ *
+ * The bet's true outcome (e.g. "bet Rockets" when seeing "Lakers ML · NO")
+ * is communicated via the row's AI walkthrough payload + alert email
+ * action line, where it can be spelled out without the row label
+ * disagreeing with Kalshi's contract title.
+ */
 export function resolveBet(s: {
   market_type: string;
   market_side: "home" | "away" | "over" | "under" | null;
@@ -81,40 +110,19 @@ export function resolveBet(s: {
   const home = teamLabel(s.home_team);
   const away = teamLabel(s.away_team);
   const yesNo = s.side.toUpperCase();
+  const contractTeam = s.market_side === "home" ? home : away;
 
   if (s.market_type === "moneyline") {
-    const marketIsHome = s.market_side === "home";
-    const team =
-      (marketIsHome && s.side === "yes") || (!marketIsHome && s.side === "no")
-        ? home
-        : away;
-    return `${team} ML · ${yesNo}`;
+    return `${contractTeam} ML · ${yesNo}`;
   }
 
   if (s.market_type === "match_winner") {
-    // Tennis. Same home/away resolution as moneyline; the "team" here is
-    // a single player. No "ML" suffix since the bet is implicitly "win
-    // the match" — just the player's name reads cleanly.
-    const marketIsHome = s.market_side === "home";
-    const player =
-      (marketIsHome && s.side === "yes") || (!marketIsHome && s.side === "no")
-        ? home
-        : away;
-    return `${player} · ${yesNo}`;
+    // Tennis. The "team" is a single player; no "ML" suffix needed.
+    return `${contractTeam} · ${yesNo}`;
   }
 
   if (s.market_type === "total") {
-    // Kalshi's totals contracts are ALWAYS named "Over X.5" (our
-    // normalizer enforces this). Show the contract name verbatim plus
-    // the YES/NO suffix — same noun-then-button pattern as moneyline.
-    //
-    // Don't be tempted to flip the description to "Under X.5" on no-side
-    // signals: users read predicates like "Under" as something to be
-    // negated by NO, then mentally invert twice and arrive at Over —
-    // the wrong answer. Keeping the contract name fixed and letting
-    // YES/NO mean "which button" matches the moneyline pattern they
-    // already parse correctly, AND matches what they'll see when they
-    // click through to Kalshi.
+    // Kalshi's totals contracts are ALWAYS "Over X.5" (normalizer-enforced).
     const line = s.line ?? 0;
     return `Over ${line} · ${yesNo}`;
   }
@@ -124,14 +132,12 @@ export function resolveBet(s: {
     s.market_type === "runline" ||
     s.market_type === "spread"
   ) {
-    const marketIsHome = s.market_side === "home";
-    const yesPicksMarketTeam = s.side === "yes";
+    // Line is stored from the Kalshi contract's perspective: positive =
+    // underdog (+3.5), negative = favorite (-3.5), zero = pick'em.
     const line = s.line ?? 0;
-    const team = marketIsHome === yesPicksMarketTeam ? home : away;
-    const teamLine = marketIsHome === yesPicksMarketTeam ? line : -line;
-    if (teamLine > 0) return `${team} +${teamLine} · ${yesNo}`;
-    if (teamLine < 0) return `${team} ${teamLine} · ${yesNo}`;
-    return `${team} PK · ${yesNo}`;
+    if (line > 0) return `${contractTeam} +${line} · ${yesNo}`;
+    if (line < 0) return `${contractTeam} ${line} · ${yesNo}`;
+    return `${contractTeam} PK · ${yesNo}`;
   }
 
   // Fallback for unrecognized market types
