@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { getCurrentUser } from "@/lib/session";
+import { getInt, KNOWN_KEYS } from "@/lib/system-config";
+import {
+  countActivityToday,
+  findUserById,
+  logActivity,
+} from "@/lib/users";
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -70,6 +78,43 @@ Always reference the actual numbers from the context payload — don't generaliz
 
 
 export async function POST(req: Request): Promise<NextResponse> {
+  // Auth + per-user daily quota. Admins are unlimited; everyone else
+  // gets the user-row's ai_quota_daily (which falls back to the global
+  // default in system_config). Quota window is per UTC calendar day.
+  const claims = await getCurrentUser();
+  if (!claims) {
+    return NextResponse.json({ error: "not signed in" }, { status: 401 });
+  }
+  if (claims.role !== "admin") {
+    const user = await findUserById(claims.sub);
+    if (!user || user.disabled) {
+      return NextResponse.json({ error: "not signed in" }, { status: 401 });
+    }
+    const defaultQuota = await getInt(KNOWN_KEYS.DEFAULT_AI_QUOTA_DAILY, 10);
+    // Per-user override on the user row beats the global default.
+    const quota = user.ai_quota_daily > 0 ? user.ai_quota_daily : defaultQuota;
+    const usedToday = await countActivityToday(claims.sub, "ai_chat");
+    if (usedToday >= quota) {
+      try {
+        await logActivity({
+          user_id: claims.sub,
+          action: "ai_quota_blocked",
+          metadata: { used: usedToday, quota },
+        });
+      } catch {
+        /* noop */
+      }
+      return NextResponse.json(
+        {
+          error: `daily AI limit reached (${usedToday}/${quota}). Resets at 00:00 UTC.`,
+          used: usedToday,
+          quota,
+        },
+        { status: 429 },
+      );
+    }
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -139,6 +184,16 @@ export async function POST(req: Request): Promise<NextResponse> {
       choices?: { message?: { content?: string } }[];
     };
     const content = data.choices?.[0]?.message?.content ?? "(empty response)";
+    // Log a successful AI request for quota accounting + admin visibility.
+    try {
+      await logActivity({
+        user_id: claims.sub,
+        action: "ai_chat",
+        metadata: { context_type: body.context?.type ?? null },
+      });
+    } catch {
+      /* noop */
+    }
     return NextResponse.json({ message: content });
   } catch (e) {
     return NextResponse.json(

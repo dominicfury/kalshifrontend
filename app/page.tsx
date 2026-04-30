@@ -29,6 +29,7 @@ import {
   type SportActivity,
 } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/session";
+import { getInt, KNOWN_KEYS } from "@/lib/system-config";
 
 // Filters are URL-driven, so we render on every request rather than ISR.
 export const dynamic = "force-dynamic";
@@ -91,6 +92,15 @@ function stalenessCell(sec: number | null, staleAt: number) {
   const tone =
     sec > staleAt ? "text-rose-200" : sec > staleAt / 2 ? "text-amber-200" : "text-zinc-200";
   return <span className={`font-mono tabular-nums ${tone}`}>{sec}s</span>;
+}
+
+
+function formatInterval(sec: number): string {
+  if (sec < 60) return `${sec}s`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m`;
+  const h = (sec / 3600).toFixed(min % 60 === 0 ? 0 : 1);
+  return `${h}h`;
 }
 
 
@@ -184,16 +194,23 @@ export default async function SignalsPage({
   let signals: SignalRow[] = [];
   let activeSports: { sport: string; n: number }[] = [];
   let sportActivity: SportActivity[] = [];
+  let kalshiIntervalSec = 30;
+  let bookIntervalSec = 1800;
   let error: string | null = null;
   try {
-    [signals, activeSports, sportActivity] = await Promise.all([
-      fetchRecentSignals(100, filters, sort),
-      fetchActiveSports(),
-      fetchSportActivity(),
-    ]);
+    [signals, activeSports, sportActivity, kalshiIntervalSec, bookIntervalSec] =
+      await Promise.all([
+        fetchRecentSignals(100, filters, sort),
+        fetchActiveSports(),
+        fetchSportActivity(),
+        getInt(KNOWN_KEYS.KALSHI_POLL_INTERVAL_SEC, 30),
+        getInt(KNOWN_KEYS.BOOK_POLL_INTERVAL_SEC, 1800),
+      ]);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
+
+  const isAdmin = me.role === "admin";
 
   const positiveClv = signals.filter((s) => s.clv_pct != null && s.clv_pct > 0).length;
   const withClv = signals.filter((s) => s.clv_pct != null).length;
@@ -201,9 +218,17 @@ export default async function SignalsPage({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-        <SportActivityBar activity={sportActivity} />
+        <div className="flex flex-wrap items-center gap-3">
+          <SportActivityBar activity={sportActivity} />
+          <span
+            className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900/60 px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-400"
+            title="Polling cadence — admin can change in Settings"
+          >
+            polls · K{formatInterval(kalshiIntervalSec)} · B{formatInterval(bookIntervalSec)}
+          </span>
+        </div>
         <div className="flex items-center gap-3 text-xs text-zinc-300">
-          <RepollButton />
+          {isAdmin && <RepollButton />}
           <AutoRefresh intervalMs={30_000} />
           <span className="inline-flex items-center gap-1.5">
             <Activity className="size-3.5" />

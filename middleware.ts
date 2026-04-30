@@ -16,6 +16,7 @@ const PUBLIC_PATHS = new Set<string>([
 ]);
 
 const ADMIN_ONLY_PREFIXES: string[] = [
+  "/clv",
   "/health",
   "/settings",
   "/api/admin",

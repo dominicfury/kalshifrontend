@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { getCurrentUser } from "@/lib/session";
+import { logActivity } from "@/lib/users";
+
 export const runtime = "nodejs";
 // Backend now kicks off the poll as a background task and returns
 // immediately. Vercel hobby caps function duration at 10s anyway, so a
@@ -15,8 +18,23 @@ function jsonError(status: number, message: string, extra: Record<string, unknow
 // Vercel's edge — the browser only sees a same-origin POST. Always returns
 // JSON, even on upstream HTML error pages, so the client never trips on
 // JSON.parse and the user can see WHAT went wrong.
+//
+// Auth: admin-only. Non-admin users get a friendly 403; the button is
+// also hidden in their nav so they shouldn't reach this in normal use.
 export async function POST() {
   try {
+    const me = await getCurrentUser();
+    if (!me) return jsonError(401, "not signed in");
+    if (me.role !== "admin") {
+      // Best-effort log; don't block the rejection on log failure.
+      try {
+        await logActivity({ user_id: me.sub, action: "repoll_quota_blocked" });
+      } catch {
+        /* noop */
+      }
+      return jsonError(403, "manual repoll is admin-only");
+    }
+
     const rawBackendUrl = process.env.BACKEND_URL;
     const token = process.env.REPOLL_TOKEN;
     if (!rawBackendUrl) {
@@ -40,6 +58,9 @@ export async function POST() {
         method: "POST",
         headers: {
           "X-Repoll-Token": token,
+          // Forward the verified role so the backend can also enforce
+          // admin-only at its end (defense in depth).
+          "X-Caller-Role": me.role,
           "Content-Type": "application/json",
         },
         cache: "no-store",
@@ -50,6 +71,13 @@ export async function POST() {
         e instanceof Error ? e.message : "fetch failed",
         { backend: backendUrl },
       );
+    }
+
+    // Best-effort log so the admin sees their own repolls in /settings.
+    try {
+      await logActivity({ user_id: me.sub, action: "repoll" });
+    } catch {
+      /* noop */
     }
 
     const text = await r.text();

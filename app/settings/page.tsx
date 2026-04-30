@@ -1,5 +1,19 @@
-import { AlertCircle, CheckCircle2, Cog, Database, Mail, Network, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Cog,
+  Database,
+  History,
+  Mail,
+  Network,
+  Sliders,
+  Sparkles,
+  Users,
+} from "lucide-react";
 
+import { ActivityCard } from "@/components/admin/activity-card";
+import { SystemConfigCard } from "@/components/admin/system-config-card";
+import { UsersCard } from "@/components/admin/users-card";
 import { AutoRefresh } from "@/components/layout/auto-refresh";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -101,6 +115,57 @@ export default async function SettingsPage() {
         description="Live API health, quota usage, and recent errors. Use this page to spot when something stopped working."
         actions={<AutoRefresh intervalMs={30_000} />}
       />
+
+      <Section
+        eyebrow="admin"
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Sliders className="size-4 text-orange-300" />
+            System config
+          </span>
+        }
+        description="Runtime-editable settings. Pollers re-read these on every tick — saves take effect within one cycle without a redeploy."
+      >
+        <Card>
+          <CardBody>
+            <SystemConfigCard />
+          </CardBody>
+        </Card>
+      </Section>
+
+      <Section
+        eyebrow="admin"
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Users className="size-4 text-orange-300" />
+            Users
+          </span>
+        }
+        description="Verify pending signups, change AI quotas, disable bad actors. Self-signed-up users get 12 hours of access; verify them here to extend permanently."
+      >
+        <Card>
+          <CardBody>
+            <UsersCard />
+          </CardBody>
+        </Card>
+      </Section>
+
+      <Section
+        eyebrow="admin"
+        title={
+          <span className="inline-flex items-center gap-2">
+            <History className="size-4 text-orange-300" />
+            Activity log
+          </span>
+        }
+        description="Last 100 events across all users — logins, AI usage, repolls, blocked attempts."
+      >
+        <Card>
+          <CardBody>
+            <ActivityCard />
+          </CardBody>
+        </Card>
+      </Section>
 
       <Section eyebrow="upstreams" title="API status">
         <div className="grid gap-3 md:grid-cols-2">
