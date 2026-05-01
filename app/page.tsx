@@ -16,7 +16,6 @@ import {
   Th,
   Tr,
 } from "@/components/ui/data-table";
-import { FreshnessPill } from "@/components/ui/freshness-pill";
 import { SignalAnnouncer } from "@/components/ui/signal-announcer";
 import { SortHeader } from "@/components/ui/sort-header";
 import { num, pct, resolveBet, teamLabel } from "@/lib/format";
@@ -340,7 +339,13 @@ export default async function SignalsPage({
         </div>
         <div className="flex items-center gap-3 text-xs text-zinc-300">
           {isAdmin && <RepollButton />}
-          <AutoRefresh intervalMs={60_000} />
+          {/* AutoRefresh's visible countdown is hidden — the LiveIndicator
+              (Kalshi/Books status in the header) gives the same freshness
+              signal in a single place. The component still runs its 60s
+              timer + router.refresh() so the page keeps updating. */}
+          <div className="hidden">
+            <AutoRefresh intervalMs={60_000} />
+          </div>
           <span className="inline-flex items-center gap-1.5">
             <Activity className="size-3.5" />
             {signals.length} rows
@@ -385,10 +390,6 @@ export default async function SignalsPage({
         >
           <THead>
             <Tr>
-              {/* Live freshness — replaces the old "When" column. Always shown. */}
-              <Th>
-                <span className="text-zinc-300">Live</span>
-              </Th>
               {/* Game in — always shown. Sortable. */}
               <Th>
                 <SortHeader
@@ -529,19 +530,6 @@ export default async function SignalsPage({
                   0.001;
               return (
                 <Tr key={s.id} className={rowTone}>
-                  <Td>
-                    <Link
-                      href={`/signals/${s.id}`}
-                      className="hover:opacity-80"
-                      title={`Detected ${s.detected_at}`}
-                    >
-                      <FreshnessPill
-                        ageSec={s.live_quote_age_sec}
-                        detectedAt={s.detected_at}
-                        serverNowMs={serverNowMs}
-                      />
-                    </Link>
-                  </Td>
                   <Td>{timeToStartCell(s.time_to_start_min)}</Td>
                   <Td>
                     <Badge variant="muted" mono>
