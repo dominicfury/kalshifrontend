@@ -74,20 +74,17 @@ export default async function RootLayout({
                 <div className="flex min-w-0 items-center gap-3 sm:gap-6">
                   <Link
                     href="/"
-                    className="group flex shrink-0 items-center gap-2.5 rounded-md py-1 pr-2 transition-colors hover:bg-zinc-900/40"
+                    className="group flex shrink-0 items-center rounded-md py-1 pr-2 transition-colors hover:bg-zinc-900/40"
                     aria-label="Sportsbetbrain home"
                   >
                     <Image
                       src="/logo.png"
-                      alt=""
+                      alt="Sportsbetbrain"
                       width={474}
                       height={530}
                       priority
-                      className="h-[90px] w-auto sm:h-[100px]"
+                      className="h-9 w-auto sm:h-10"
                     />
-                    <span className="hidden text-sm font-semibold tracking-tight text-zinc-100 transition-colors group-hover:text-white sm:inline">
-                      Sportsbetbrain
-                    </span>
                   </Link>
                   {/* Vertical divider — only visible at sm+ since the nav
                       flows below the logo on narrow screens. */}
