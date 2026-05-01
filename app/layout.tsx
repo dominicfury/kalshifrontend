@@ -83,7 +83,7 @@ export default async function RootLayout({
                       width={474}
                       height={530}
                       priority
-                      className="h-9 w-auto sm:h-10"
+                      className="h-[108px] w-auto sm:h-[120px]"
                     />
                   </Link>
                   {/* Vertical divider — only visible at sm+ since the nav
