@@ -495,17 +495,19 @@ export default async function SignalsPage({
           <TBody>
             {signals.map((s) => {
               // Visual flag for rows that need investigation:
-              //   - rose tint: actual stale-trap pattern — Kalshi quiet
-              //     for >10 min AND >2× longer than books (books moving on
-              //     info Kalshi hasn't priced in). Mostly impossible in
-              //     default Live view since the filter requires the market
-              //     to be actively polled, but kept for ?all=1 audit.
+              //   - rose tint: actual stale-trap pattern — Kalshi quiet AND
+              //     books JUST moved (suggesting news-driven repricing the
+              //     Kalshi MMs haven't caught up to). Books also-quiet means
+              //     no news event, so the staleness ratio alone is just
+              //     illiquidity (common on tennis match_winner). This logic
+              //     mirrors backend Filter A1 in generate_signals.py.
               //   - amber tint: edge >= 5% — spec §2 "treat with deep suspicion"
               const isStaleTrap =
                 s.kalshi_staleness_sec != null &&
                 s.kalshi_staleness_sec > 600 &&
-                (s.book_staleness_sec == null ||
-                  s.kalshi_staleness_sec > s.book_staleness_sec * 2);
+                s.book_staleness_sec != null &&
+                s.book_staleness_sec < 600 &&
+                s.kalshi_staleness_sec > s.book_staleness_sec * 2;
               const isHugeEdge = s.edge_pct_after_fees >= 0.05;
               const rowTone = isStaleTrap
                 ? "bg-rose-950/30"
