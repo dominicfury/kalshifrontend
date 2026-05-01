@@ -248,7 +248,13 @@ export async function fetchRecentSignals(
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
     where.push("s.yes_book_depth >= 25");
     where.push("s.n_books_used >= 2");
-    where.push("lq.polled_at >= datetime('now', '-3 minutes')");
+    // Live-quote recency cap. A full Kalshi poll takes 150-200s in practice
+    // (400+ markets, concurrency-capped at 6 for orderbook fetches), so the
+    // gap between distinct poll moments routinely runs 150-210s. A 3-min
+    // cap was zeroing out the entire Live table whenever a poll ran long,
+    // producing a "rows disappear and reappear" flash on the dashboard.
+    // 5 minutes gives ~50% headroom over the worst-case observed gap.
+    where.push("lq.polled_at >= datetime('now', '-5 minutes')");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
         "JOIN events e ON e.id = km.event_id " +

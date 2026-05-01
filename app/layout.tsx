@@ -83,7 +83,7 @@ export default async function RootLayout({
                       width={474}
                       height={530}
                       priority
-                      className="h-9 w-auto sm:h-10"
+                      className="h-[90px] w-auto sm:h-[100px]"
                     />
                     <span className="hidden text-sm font-semibold tracking-tight text-zinc-100 transition-colors group-hover:text-white sm:inline">
                       Sportsbetbrain
