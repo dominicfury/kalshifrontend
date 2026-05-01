@@ -46,7 +46,7 @@ function tooltip(a: SportActivity): string {
 
 export function SportActivityBar({ activity }: { activity: SportActivity[] }) {
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
       <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-300 mr-1">
         active
       </span>
