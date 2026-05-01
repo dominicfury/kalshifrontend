@@ -20,7 +20,7 @@ import { FreshnessPill } from "@/components/ui/freshness-pill";
 import { SignalAnnouncer } from "@/components/ui/signal-announcer";
 import { SortHeader } from "@/components/ui/sort-header";
 import { num, pct, resolveBet, teamLabel } from "@/lib/format";
-import { DEFAULT_BANKROLL, suggestedStakeDollars } from "@/lib/kelly";
+import { suggestedStakeFraction } from "@/lib/kelly";
 import {
   fetchActiveSports,
   fetchLiveStats,
@@ -578,15 +578,15 @@ export default async function SignalsPage({
                   </Td>
                   <Td align="right" mono>
                     {(() => {
-                      const stake = suggestedStakeDollars(s);
+                      const stake = suggestedStakeFraction(s);
                       if (stake == null)
                         return <span className="text-zinc-500">—</span>;
                       return (
                         <span
                           className="text-emerald-200"
-                          title={`Quarter-Kelly on $${DEFAULT_BANKROLL} bankroll`}
+                          title="Quarter-Kelly as a percentage of bankroll. Multiply by your own bankroll to get the dollar stake."
                         >
-                          ${stake.toFixed(2)}
+                          {(stake * 100).toFixed(2)}%
                         </span>
                       );
                     })()}
@@ -656,8 +656,8 @@ export default async function SignalsPage({
                           edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
                           yes_book_depth: s.yes_book_depth,
                           n_books_used: s.n_books_used,
-                          suggested_stake_dollars: suggestedStakeDollars(s),
-                          stake_basis: `quarter-kelly on $${DEFAULT_BANKROLL} bankroll`,
+                          suggested_stake_pct_of_bankroll: suggestedStakeFraction(s),
+                          stake_basis: "quarter-kelly fraction of bankroll",
                           book_staleness_sec: s.book_staleness_sec,
                           kalshi_staleness_sec: s.kalshi_staleness_sec,
                           live_quote_age_sec: s.live_quote_age_sec,
