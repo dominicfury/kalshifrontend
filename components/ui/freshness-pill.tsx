@@ -41,12 +41,13 @@ function FreshnessPillImpl({
   detectedAt: string | null;
   serverNowMs: number;
 }) {
-  // Tick the displayed values every 5s. 5s is a balance between visual
-  // smoothness and re-render volume — at 100 rows × 1Hz we'd be doing 6000
-  // re-renders per minute on a quiet tab.
+  // Tick the displayed values every 1s so the row freshness reads as a
+  // live counter alongside the AutoRefresh "refresh Xs" countdown — they
+  // were noticeably out of sync at 5s. Re-render cost: ~100 rows × 1Hz =
+  // 100 lightweight re-renders/sec on the table, fine on modern browsers.
   const [now, setNow] = useState<number>(() => Date.now());
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 5000);
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
 
