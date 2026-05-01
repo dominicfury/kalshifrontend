@@ -75,6 +75,7 @@ If the bet field is missing, derive from the raw mapping:
 - **book_staleness_sec** ("B stale", seconds): seconds since the freshest sportsbook quote in the consensus actually moved. NOTE: with the default 30-minute book poll cadence, healthy books routinely sit at 1800–3600s. Don't flag as "stale" until >2× the typical poll interval. NOT inherently bad.
 - **n_books_used** (e.g. 14): number of sportsbooks in the devigged consensus. More books = sharper signal. <3 is low confidence; ≥4 with Pinnacle in the mix is solid.
 - **clv_pct** (fraction; e.g. 0.04 = +4% CLV): closing-line value. Once the game starts, we record the Kalshi mid-price at puck drop. CLV = (closing − entry) / entry for the side you took. Positive CLV across many signals = real edge. Single CLV is noise.
+- **suggested_stake_dollars** (USD; e.g. 1.23): quarter-Kelly stake on the user's bankroll (see stake_basis). Null when edge < 2% (no stake suggested — these rows are track-only). When present, this is the dollar amount to bet, NOT a percentage of bankroll. Quote it verbatim. Reasoning: full Kelly assumes the edge estimate is exactly right; ¼ Kelly absorbs the ~3-4× safety factor needed when the consensus model occasionally overstates edge.
 - **status**: OPEN (no closing yet), CLOSED (closing recorded, awaiting outcome), WIN/LOSS/VOID after settlement.
 - **side**: 'yes' or 'no' — the side of the Kalshi contract that's +EV.
 

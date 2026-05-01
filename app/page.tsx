@@ -20,6 +20,7 @@ import { FreshnessPill } from "@/components/ui/freshness-pill";
 import { SignalAnnouncer } from "@/components/ui/signal-announcer";
 import { SortHeader } from "@/components/ui/sort-header";
 import { num, pct, resolveBet, teamLabel } from "@/lib/format";
+import { DEFAULT_BANKROLL, suggestedStakeDollars } from "@/lib/kelly";
 import {
   fetchActiveSports,
   fetchLiveStats,
@@ -438,6 +439,11 @@ export default async function SignalsPage({
                   align="right"
                 />
               </Th>
+              {/* Stake — ¼ Kelly suggested stake, surfaced only on rows
+                  with edge >= 2% (see lib/kelly.ts STAKE_GATE_EDGE_PCT).
+                  Sub-2% rows show "—" so the column doesn't disappear
+                  visually as edges fluctuate. */}
+              <Th align="right">Stake</Th>
               {/* Depth — always shown. Disambiguates @$ omission for thin books. */}
               <Th align="right">Depth</Th>
               {/* Books — always shown. Sortable. */}
@@ -570,6 +576,21 @@ export default async function SignalsPage({
                       )}
                     </div>
                   </Td>
+                  <Td align="right" mono>
+                    {(() => {
+                      const stake = suggestedStakeDollars(s);
+                      if (stake == null)
+                        return <span className="text-zinc-500">—</span>;
+                      return (
+                        <span
+                          className="text-emerald-200"
+                          title={`Quarter-Kelly on $${DEFAULT_BANKROLL} bankroll`}
+                        >
+                          ${stake.toFixed(2)}
+                        </span>
+                      );
+                    })()}
+                  </Td>
                   <Td align="right" mono muted>
                     {s.yes_book_depth == null
                       ? "—"
@@ -635,6 +656,8 @@ export default async function SignalsPage({
                           edge_pct_after_fees_at_size: s.edge_pct_after_fees_at_size,
                           yes_book_depth: s.yes_book_depth,
                           n_books_used: s.n_books_used,
+                          suggested_stake_dollars: suggestedStakeDollars(s),
+                          stake_basis: `quarter-kelly on $${DEFAULT_BANKROLL} bankroll`,
                           book_staleness_sec: s.book_staleness_sec,
                           kalshi_staleness_sec: s.kalshi_staleness_sec,
                           live_quote_age_sec: s.live_quote_age_sec,
