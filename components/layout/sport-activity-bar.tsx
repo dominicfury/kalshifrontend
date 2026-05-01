@@ -7,8 +7,6 @@ const SPORT_LABEL: Record<string, string> = {
   wnba: "WNBA",
   tennis_atp: "ATP",
   tennis_wta: "WTA",
-  ncaab: "NCAAB",
-  nfl: "NFL",
 };
 
 const STATUS_DOT: Record<SportActivityStatus, string> = {

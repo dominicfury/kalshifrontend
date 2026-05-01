@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { getDb } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { getInt, KNOWN_KEYS } from "@/lib/system-config";
-import {
-  countActivityToday,
-  findUserById,
-  logActivity,
-} from "@/lib/users";
+import { findUserById, logActivity } from "@/lib/users";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -116,41 +113,9 @@ Always reference the actual numbers from the context payload (multiplied to perc
 
 
 export async function POST(req: Request): Promise<NextResponse> {
-  // Auth + per-user daily quota. Admins are unlimited; everyone else
-  // gets the user-row's ai_quota_daily (which falls back to the global
-  // default in system_config). Quota window is per UTC calendar day.
   const claims = await getCurrentUser();
   if (!claims) {
     return NextResponse.json({ error: "not signed in" }, { status: 401 });
-  }
-  if (claims.role !== "admin") {
-    const user = await findUserById(claims.sub);
-    if (!user || user.disabled) {
-      return NextResponse.json({ error: "not signed in" }, { status: 401 });
-    }
-    const defaultQuota = await getInt(KNOWN_KEYS.DEFAULT_AI_QUOTA_DAILY, 10);
-    // Per-user override on the user row beats the global default.
-    const quota = user.ai_quota_daily > 0 ? user.ai_quota_daily : defaultQuota;
-    const usedToday = await countActivityToday(claims.sub, "ai_chat");
-    if (usedToday >= quota) {
-      try {
-        await logActivity({
-          user_id: claims.sub,
-          action: "ai_quota_blocked",
-          metadata: { used: usedToday, quota },
-        });
-      } catch {
-        /* noop */
-      }
-      return NextResponse.json(
-        {
-          error: `daily AI limit reached (${usedToday}/${quota}). Resets at 00:00 UTC.`,
-          used: usedToday,
-          quota,
-        },
-        { status: 429 },
-      );
-    }
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -168,6 +133,60 @@ export async function POST(req: Request): Promise<NextResponse> {
     body = (await req.json()) as ChatRequest;
   } catch {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+  }
+
+  // Per-user daily quota. Admins are unlimited; everyone else gets the
+  // user-row's ai_quota_daily (which falls back to the global default in
+  // system_config). Quota window is per UTC calendar day.
+  //
+  // Atomic reservation: a single conditional INSERT guarantees that two
+  // concurrent requests can't both pass a count-then-check race and slip
+  // past the cap. rowsAffected=0 means the slot was full at SQL time.
+  const isAdmin = claims.role === "admin";
+  let quota = 0;
+  if (!isAdmin) {
+    const user = await findUserById(claims.sub);
+    if (!user || user.disabled) {
+      return NextResponse.json({ error: "not signed in" }, { status: 401 });
+    }
+    const defaultQuota = await getInt(KNOWN_KEYS.DEFAULT_AI_QUOTA_DAILY, 10);
+    quota = user.ai_quota_daily > 0 ? user.ai_quota_daily : defaultQuota;
+
+    const reserve = await getDb().execute({
+      sql: `INSERT INTO user_activity (user_id, action, metadata_json)
+            SELECT ?, 'ai_chat', ?
+            WHERE (
+              SELECT COUNT(*) FROM user_activity
+              WHERE user_id = ? AND action = 'ai_chat'
+                AND created_at >= datetime('now', 'start of day')
+            ) < ?`,
+      args: [
+        claims.sub,
+        JSON.stringify({ context_type: body.context?.type ?? null }),
+        claims.sub,
+        quota,
+      ],
+    });
+    const reserved = Number(reserve.rowsAffected ?? 0) > 0;
+    if (!reserved) {
+      try {
+        await logActivity({
+          user_id: claims.sub,
+          action: "ai_quota_blocked",
+          metadata: { quota },
+        });
+      } catch {
+        /* noop */
+      }
+      return NextResponse.json(
+        {
+          error: `daily AI limit reached (${quota}/${quota}). Resets at 00:00 UTC.`,
+          used: quota,
+          quota,
+        },
+        { status: 429 },
+      );
+    }
   }
 
   const messages: Message[] = [{ role: "system", content: SYSTEM_PROMPT }];
@@ -222,15 +241,18 @@ export async function POST(req: Request): Promise<NextResponse> {
       choices?: { message?: { content?: string } }[];
     };
     const content = data.choices?.[0]?.message?.content ?? "(empty response)";
-    // Log a successful AI request for quota accounting + admin visibility.
-    try {
-      await logActivity({
-        user_id: claims.sub,
-        action: "ai_chat",
-        metadata: { context_type: body.context?.type ?? null },
-      });
-    } catch {
-      /* noop */
+    // Non-admins were already logged at quota-reservation time. Admins are
+    // unlimited so they skip the reservation; log them here for audit.
+    if (isAdmin) {
+      try {
+        await logActivity({
+          user_id: claims.sub,
+          action: "ai_chat",
+          metadata: { context_type: body.context?.type ?? null },
+        });
+      } catch {
+        /* noop */
+      }
     }
     return NextResponse.json({ message: content });
   } catch (e) {

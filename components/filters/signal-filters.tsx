@@ -23,8 +23,6 @@ const SPORT_LABELS: Record<string, string> = {
   wnba: "WNBA",
   tennis_atp: "ATP",
   tennis_wta: "WTA",
-  ncaab: "NCAAB",
-  nfl: "NFL",
 };
 
 
