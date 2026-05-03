@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { sendEmail, verificationEmail } from "@/lib/email";
-  import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { getBool, KNOWN_KEYS } from "@/lib/system-config";
 import { verifyTurnstile } from "@/lib/turnstile";
 import {
