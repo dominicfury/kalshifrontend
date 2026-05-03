@@ -261,6 +261,11 @@ export async function fetchRecentSignals(
   if (!filters.showAll) {
     const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
     where.push("s.closing_kalshi_yes_price IS NULL");
+    // invalidated_at is set by generate_signals when re-evaluation
+    // finds the edge has dropped below threshold (or depth/consensus
+    // failed). Hides stale-display signals where the original logged
+    // edge no longer reflects current book consensus.
+    where.push("s.invalidated_at IS NULL");
     where.push("s.edge_pct_after_fees < ?");
     args.push(hugeEdgePct / 100.0);
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
