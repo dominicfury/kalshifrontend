@@ -242,12 +242,13 @@ export async function fetchRecentSignals(
   //      table answers the question directly — if Kalshi is being polled
   //      for this market, the signal is current.
   //
-  // The huge-edge cutoff (edge < 5%) was removed by user request: real
-  // edges in sparse-coverage markets (e.g. WNBA, niche tennis) routinely
-  // sit at 5-10% and are worth surfacing. The user can triage via the
-  // depth + n_books columns + the amber-tint warning in app/page.tsx
-  // (isHugeEdge → bg-amber-950/20). For NHL/NBA/MLB with 20+ book
-  // consensus, edges that big still mean "treat with deep suspicion."
+  // The huge-edge cutoff is admin-tunable via system_config
+  // (live_huge_edge_cutoff_pct, default 7). Sparse-coverage edges
+  // (WNBA, niche tennis with 5-6 books) can be legit at 5-7%; the
+  // 10%+ region is mostly line-drift traps where the sharp books
+  // moved off our matched line and our 4-book consensus is stale.
+  // Set to 100 to disable. Triage tools on the row: depth + n_books
+  // columns + amber-tint warning in app/page.tsx (isHugeEdge >= 5%).
   //
   // We deliberately do NOT filter on:
   //   - kalshi_staleness_sec: generate_signals already rejects via the
@@ -258,7 +259,10 @@ export async function fetchRecentSignals(
   //
   // Visible via ?all=1 for full audit trail / CLV bucket review.
   if (!filters.showAll) {
+    const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
     where.push("s.closing_kalshi_yes_price IS NULL");
+    where.push("s.edge_pct_after_fees < ?");
+    args.push(hugeEdgePct / 100.0);
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
     where.push("s.yes_book_depth >= 50");
     where.push("s.n_books_used >= 2");
