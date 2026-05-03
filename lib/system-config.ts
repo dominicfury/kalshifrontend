@@ -24,6 +24,7 @@ export const KNOWN_KEYS = {
   DEFAULT_AI_QUOTA_DAILY: "default_ai_quota_daily",
   ODDS_QUOTA_RESERVE: "odds_quota_reserve",
   USER_REPOLL_QUOTA_DAILY: "user_repoll_quota_daily",
+  SIGNUPS_ENABLED: "signups_enabled",
   SPORT_ENABLED_NHL: "sport_enabled_nhl",
   SPORT_ENABLED_NBA: "sport_enabled_nba",
   SPORT_ENABLED_MLB: "sport_enabled_mlb",
@@ -38,6 +39,7 @@ export const DEFAULT_VALUES: Record<string, string> = {
   [KNOWN_KEYS.DEFAULT_AI_QUOTA_DAILY]: "10",
   [KNOWN_KEYS.ODDS_QUOTA_RESERVE]: "1000",
   [KNOWN_KEYS.USER_REPOLL_QUOTA_DAILY]: "0",
+  [KNOWN_KEYS.SIGNUPS_ENABLED]: "1",
   [KNOWN_KEYS.SPORT_ENABLED_NHL]: "1",
   [KNOWN_KEYS.SPORT_ENABLED_NBA]: "1",
   [KNOWN_KEYS.SPORT_ENABLED_MLB]: "1",
@@ -67,6 +69,13 @@ export async function getString(key: string, fallback: string): Promise<string> 
   if (!r.rows.length) return fallback;
   const v = (r.rows[0] as unknown as Record<string, unknown>).value;
   return v == null ? fallback : String(v);
+}
+
+// Boolean-ish read for "0"/"1" toggles. Anything other than "1" is treated
+// as off, so an admin can disable by clearing the value too.
+export async function getBool(key: string, fallback: boolean): Promise<boolean> {
+  const v = await getString(key, fallback ? "1" : "0");
+  return v === "1";
 }
 
 export async function listConfig(): Promise<SystemConfigRow[]> {

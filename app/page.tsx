@@ -32,6 +32,7 @@ import {
   type SportActivity,
 } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/session";
+import { getBool, KNOWN_KEYS } from "@/lib/system-config";
 // Filters are URL-driven, so we render on every request rather than ISR.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -294,7 +295,8 @@ export default async function SignalsPage({
   // function only runs once auth is established.
   const me = await getCurrentUser();
   if (!me) {
-    return <LandingPage />;
+    const signupsOpen = await getBool(KNOWN_KEYS.SIGNUPS_ENABLED, true);
+    return <LandingPage signupsOpen={signupsOpen} />;
   }
 
   const sp = await searchParams;
@@ -558,7 +560,7 @@ export default async function SignalsPage({
                           className="font-mono tabular-nums text-[10px] text-zinc-500"
                           title="Edge after walking $200 of fills up the book"
                         >
-                          @${" "}
+                          @${" "}
                           {pct(s.edge_pct_after_fees_at_size, 1)}
                         </span>
                       )}

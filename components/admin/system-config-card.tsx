@@ -40,6 +40,20 @@ const FIELD_DEFS: Array<{
   },
 ];
 
+const ACCESS_FIELD_DEFS: Array<{
+  key: string;
+  label: string;
+  hint: string;
+  unit: "toggle";
+}> = [
+  {
+    key: "signups_enabled",
+    label: "Public signups",
+    hint: "Off = the /signup form is closed and the landing page hides the Sign up CTAs. Existing users + admin-created accounts still work.",
+    unit: "toggle",
+  },
+];
+
 const SPORT_FIELD_DEFS: Array<{
   key: string;
   label: string;
@@ -94,6 +108,15 @@ export async function SystemConfigCard() {
     unit: d.unit,
     value: byKey.get(d.key)?.value ?? "",
   }));
+  const accessFields = ACCESS_FIELD_DEFS.map((d) => ({
+    key: d.key,
+    label: d.label,
+    hint: d.hint,
+    unit: d.unit,
+    // Default to "1" so a fresh DB renders "signups open" before the
+    // backend's seed runs. Admin can flip to "0" to close them.
+    value: byKey.get(d.key)?.value ?? "1",
+  }));
   const sportFields = SPORT_FIELD_DEFS.map((d) => ({
     key: d.key,
     label: d.label,
@@ -106,6 +129,16 @@ export async function SystemConfigCard() {
   return (
     <div className="space-y-6">
       <SystemConfigEditor fields={fields} />
+      <div className="space-y-2">
+        <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-300">
+          Access — toggle on/off
+        </div>
+        <p className="text-[11px] leading-snug text-zinc-500">
+          Closing public signups blocks new account creation immediately
+          (existing users keep working).
+        </p>
+        <SystemConfigEditor fields={accessFields} />
+      </div>
       <div className="space-y-2">
         <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-300">
           Sports — toggle on/off
