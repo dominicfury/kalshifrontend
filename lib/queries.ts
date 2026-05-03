@@ -67,6 +67,7 @@ const SignalRowSchema = z.object({
   // longer holds (B/C/D failed at re-eval). Only surfaced in Recent / Audit
   // views — Live filters these rows out entirely.
   invalidated_at: z.string().nullable(),
+  n_books_interpolated: intLike,
   ticker: z.string(),
   market_type: z.string(),
   period: z.string(),
@@ -110,6 +111,13 @@ export interface SignalRow {
   resolved_outcome: "yes" | "no" | "void" | null;
   hypothetical_pnl: number | null;
   invalidated_at: string | null;
+  // How many of the n_books_used books in the consensus were synthesized
+  // via cross-line interpolation (book quoted the same event at adjacent
+  // lines, we devigged at each and logit-interpolated to Kalshi's line).
+  // 0 = every contributing book quoted Kalshi's exact line. n_books_used
+  // = every book interpolated (no exact-line match). Renders as an "interp"
+  // badge in the Live row to flag assumption-heavy signals.
+  n_books_interpolated: number;
   ticker: string;
   market_type: string;
   period: string;
@@ -375,6 +383,7 @@ export async function fetchRecentSignals(
                ${LIVE_KALSHI_STALE},
                ${LIVE_BOOK_STALE},
                s.match_confidence, s.alert_sent, s.n_books_used,
+               s.n_books_interpolated,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl, s.invalidated_at,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
@@ -407,6 +416,7 @@ export async function fetchRecentSignals(
                ${LIVE_KALSHI_STALE},
                ${LIVE_BOOK_STALE},
                s.match_confidence, s.alert_sent, s.n_books_used,
+               s.n_books_interpolated,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl, s.invalidated_at,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,

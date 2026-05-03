@@ -645,7 +645,19 @@ export default async function SignalsPage({
                       : `$${Math.round(s.yes_book_depth)}`}
                   </Td>
                   <Td align="right" mono muted>
-                    {s.n_books_used}
+                    <div className="inline-flex items-center justify-end gap-1">
+                      <span>{s.n_books_used}</span>
+                      {s.n_books_interpolated > 0 && (
+                        <span
+                          className="rounded border border-amber-700/60 bg-amber-950/40 px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-amber-200"
+                          title={`${s.n_books_interpolated} of ${s.n_books_used} books were quoted at adjacent lines and interpolated to Kalshi's line. Sanity-check signals where most books are interpolated, especially on extreme Kalshi lines.`}
+                        >
+                          {s.n_books_interpolated === s.n_books_used
+                            ? "all interp"
+                            : `${s.n_books_interpolated} interp`}
+                        </span>
+                      )}
+                    </div>
                   </Td>
                   {showDiagCols && (
                     <>
