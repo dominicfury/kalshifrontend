@@ -319,13 +319,42 @@ export async function fetchRecentSignals(
   const TRACKED_SELECT =
     `CASE WHEN ts.signal_id IS NOT NULL THEN 1 ELSE 0 END AS tracked`;
 
+  // Live K stale / B stale: compute "time since price last moved" at
+  // query time from kalshi_markets / book_markets, NOT the detection-time
+  // snapshot stored on the signal row. Without this, K stale and B stale
+  // were frozen at whatever they were when the signal was logged — even
+  // hours later when the underlying market may have moved or stayed flat
+  // since. The live values track current truth: K stale grows when
+  // Kalshi is quiet, drops when Kalshi prices move; B stale grows when
+  // every book is quiet, drops when any book moves.
+  //
+  // The B-stale subquery scans book_markets for the same (event,
+  // market_type, period, line) tuple as the kalshi market, takes MAX of
+  // last_price_change_ts (= most recent book move = freshest reading).
+  // COALESCE on line handles NULL line cases (moneyline/match_winner
+  // store -9999 but join cleanliness wants both sides handled).
+  const LIVE_KALSHI_STALE = `
+    CAST((julianday('now') - julianday(km.last_price_change_ts)) * 86400 AS INTEGER)
+      AS kalshi_staleness_sec
+  `;
+  const LIVE_BOOK_STALE = `
+    (SELECT CAST((julianday('now') - julianday(MAX(bm.last_price_change_ts))) * 86400 AS INTEGER)
+     FROM book_markets bm
+     WHERE bm.event_id = km.event_id
+       AND bm.market_type = km.market_type
+       AND bm.period = km.period
+       AND COALESCE(bm.line, -9999) = COALESCE(km.line, -9999))
+      AS book_staleness_sec
+  `;
+
   const baseSql = filters.showAll
     ? `
         SELECT s.id, s.detected_at,
                s.kalshi_yes_ask, s.kalshi_no_ask, s.fair_yes_prob,
                s.side, s.edge_pct_after_fees, s.edge_pct_after_fees_at_size,
                s.expected_fill_price, s.yes_book_depth,
-               s.kalshi_staleness_sec, s.book_staleness_sec,
+               ${LIVE_KALSHI_STALE},
+               ${LIVE_BOOK_STALE},
                s.match_confidence, s.alert_sent, s.n_books_used,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl,
@@ -356,7 +385,8 @@ export async function fetchRecentSignals(
                s.kalshi_yes_ask, s.kalshi_no_ask, s.fair_yes_prob,
                s.side, s.edge_pct_after_fees, s.edge_pct_after_fees_at_size,
                s.expected_fill_price, s.yes_book_depth,
-               s.kalshi_staleness_sec, s.book_staleness_sec,
+               ${LIVE_KALSHI_STALE},
+               ${LIVE_BOOK_STALE},
                s.match_confidence, s.alert_sent, s.n_books_used,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl,
