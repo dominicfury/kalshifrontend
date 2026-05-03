@@ -50,7 +50,7 @@ const API_CARDS: ApiCard[] = [
     name: "Odds API",
     icon: <Database className="size-4" />,
     desc: "Multi-book sportsbook consensus (the fair-value oracle).",
-    staleAfterSec: 1800,            // 30 min — quota-aware polling is sparse
+    staleAfterSec: 900,             // 15 min — 10-min cadence + slack for off-phase WARM ticks
     configuredHint: "ODDS_API_KEY on Railway",
   },
   {
@@ -293,8 +293,8 @@ export default async function SettingsPage() {
               />
               <ConfigRow
                 label="Sportsbook poll interval (active)"
-                value="60s default · respects Odds quota reserve"
-                hint="us region only (3 credits per call, was 9)"
+                value="10 min default · respects Odds quota reserve"
+                hint="us+eu, ~5 credits per call, sport-tier skip applies (HOT every tick, WARM every 2nd, COLD skipped)"
               />
               <ConfigRow
                 label="Settlement worker"
@@ -328,8 +328,8 @@ export default async function SettingsPage() {
               />
               <ConfigRow
                 label="Odds API quota reserve"
-                value="50 credits"
-                hint="stop polling Odds when remaining < 50"
+                value="2000 credits"
+                hint="stop polling Odds when remaining < 2000 (~2% of the 100K/mo plan)"
               />
             </ul>
           </CardBody>

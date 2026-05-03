@@ -17,7 +17,7 @@ const FIELD_DEFS: Array<{
   {
     key: "book_poll_interval_sec",
     label: "Book poll interval",
-    hint: "How often Odds API runs. 30 min default fits the 20K/mo plan with sport-tier skip.",
+    hint: "How often Odds API runs. 10 min default fits the 100K/mo plan with sport-tier skip.",
     unit: "sec",
   },
   {
@@ -29,7 +29,7 @@ const FIELD_DEFS: Array<{
   {
     key: "odds_quota_reserve",
     label: "Odds API reserve",
-    hint: "Stop polling Odds when remaining credits drop below this (safety buffer).",
+    hint: "Stop polling Odds when remaining credits drop below this (safety buffer, ~2% of plan).",
     unit: "count",
   },
   {
