@@ -297,11 +297,13 @@ export async function fetchRecentSignals(
   // detection — so the ledger reads as "current open opportunities" instead
   // of an audit log. showAll=true returns every detection (useful for
   // analyzing edge persistence on a single market).
-  // Tracked flag: a signal is "tracked" iff a row exists in `bets` for
-  // its id. LEFT JOIN so untracked signals come back with NULL → 0.
-  const TRACKED_JOIN = `LEFT JOIN bets b ON b.signal_id = s.id`;
+  // Tracked flag: a signal is "tracked" iff a row exists in
+  // `tracked_signals` for its id. Pure marker — no fill price /
+  // contracts / stake. CLV math reads s.clv_pct (filled by the
+  // settlement worker for every signal regardless of tracking).
+  const TRACKED_JOIN = `LEFT JOIN tracked_signals ts ON ts.signal_id = s.id`;
   const TRACKED_SELECT =
-    `CASE WHEN b.id IS NOT NULL THEN 1 ELSE 0 END AS tracked`;
+    `CASE WHEN ts.signal_id IS NOT NULL THEN 1 ELSE 0 END AS tracked`;
 
   const baseSql = filters.showAll
     ? `
@@ -458,23 +460,24 @@ export interface ClvOverall {
 }
 
 export async function fetchClvOverall(daysBack = 30): Promise<ClvOverall> {
-  // Tracked-only: read from `bets`, where the admin explicitly opted into
-  // CLV tracking. clv_pct + outcome on bets are filled by the settlement
-  // worker (worker.py:record_bet_closings + resolve_bet_outcomes). Using
-  // bets instead of signals means CLV-tab counts reflect what the user
-  // actually committed to, not the universe of detected +EV signals.
+  // Tracked-only: count signals the admin marked via the +track button.
+  // s.clv_pct and s.resolved_outcome are filled by the settlement worker
+  // for every signal automatically; tracked_signals just filters the
+  // /clv tab to "what I marked." No fill price or stake involved —
+  // tracking is purely "this is an opportunity I want counted toward
+  // the model's edge proof."
   const db = getDb();
   const r = await db.execute({
     sql: `
       SELECT
         COUNT(*) AS n,
-        SUM(CASE WHEN b.outcome IS NOT NULL THEN 1 ELSE 0 END) AS n_resolved,
-        AVG(b.clv_pct) AS avg_clv,
-        AVG(CASE WHEN b.clv_pct IS NULL THEN NULL WHEN b.clv_pct > 0 THEN 1.0 ELSE 0.0 END) AS pct_positive,
+        SUM(CASE WHEN s.resolved_outcome IS NOT NULL THEN 1 ELSE 0 END) AS n_resolved,
+        AVG(s.clv_pct) AS avg_clv,
+        AVG(CASE WHEN s.clv_pct IS NULL THEN NULL WHEN s.clv_pct > 0 THEN 1.0 ELSE 0.0 END) AS pct_positive,
         AVG(s.edge_pct_after_fees) AS avg_edge
-      FROM bets b
-      LEFT JOIN signals s ON s.id = b.signal_id
-      WHERE b.placed_at >= datetime('now', ?)
+      FROM tracked_signals ts
+      JOIN signals s ON s.id = ts.signal_id
+      WHERE ts.tracked_at >= datetime('now', ?)
     `,
     args: [`-${daysBack} days`],
   });
@@ -791,12 +794,13 @@ export async function fetchClvDailyTrend(daysBack = 30): Promise<ClvDayPoint[]> 
   const db = getDb();
   const r = await db.execute({
     sql: `
-      SELECT substr(b.placed_at, 1, 10) AS day,
+      SELECT substr(ts.tracked_at, 1, 10) AS day,
              COUNT(*) AS n,
-             AVG(b.clv_pct) AS avg_clv
-      FROM bets b
-      WHERE b.placed_at >= datetime('now', ?)
-        AND b.clv_pct IS NOT NULL
+             AVG(s.clv_pct) AS avg_clv
+      FROM tracked_signals ts
+      JOIN signals s ON s.id = ts.signal_id
+      WHERE ts.tracked_at >= datetime('now', ?)
+        AND s.clv_pct IS NOT NULL
       GROUP BY day
       ORDER BY day
     `,
@@ -821,8 +825,9 @@ export interface ClvBucket {
 }
 
 export async function fetchClvByEdgeBucket(): Promise<ClvBucket[]> {
-  // Tracked-only: bucket each tracked bet by the edge of the underlying
-  // signal at detection time, average the bet's CLV inside the bucket.
+  // Tracked-only: bucket each tracked signal by edge at detection time,
+  // average its CLV inside the bucket. signals.clv_pct is filled by the
+  // settlement worker; tracked_signals filters to admin-marked ones.
   const db = getDb();
   const r = await db.execute(`
     SELECT
@@ -834,10 +839,10 @@ export async function fetchClvByEdgeBucket(): Promise<ClvBucket[]> {
         ELSE '5%+'
       END AS bucket,
       COUNT(*) AS n,
-      AVG(b.clv_pct) AS avg_clv,
+      AVG(s.clv_pct) AS avg_clv,
       AVG(s.edge_pct_after_fees) AS avg_edge
-    FROM bets b
-    JOIN signals s ON s.id = b.signal_id
+    FROM tracked_signals ts
+    JOIN signals s ON s.id = ts.signal_id
     GROUP BY bucket
     ORDER BY MIN(s.edge_pct_after_fees)
   `);
@@ -861,16 +866,17 @@ export interface ClvByCategory {
 }
 
 export async function fetchClvByCategory(): Promise<ClvByCategory[]> {
-  // Tracked-only: each tracked bet contributes to its (market_type, period)
-  // bucket using the bet's own CLV (settlement worker fills b.clv_pct).
+  // Tracked-only: each tracked signal contributes to its (market_type,
+  // period) bucket using s.clv_pct (settlement-worker filled).
   const db = getDb();
   const r = await db.execute(`
     SELECT km.market_type, km.period,
            COUNT(*) AS n,
-           AVG(b.clv_pct) AS avg_clv,
-           AVG(CASE WHEN b.clv_pct IS NULL THEN NULL WHEN b.clv_pct > 0 THEN 1.0 ELSE 0.0 END) AS pct_positive
-    FROM bets b
-    JOIN kalshi_markets km ON km.id = b.kalshi_market_id
+           AVG(s.clv_pct) AS avg_clv,
+           AVG(CASE WHEN s.clv_pct IS NULL THEN NULL WHEN s.clv_pct > 0 THEN 1.0 ELSE 0.0 END) AS pct_positive
+    FROM tracked_signals ts
+    JOIN signals s ON s.id = ts.signal_id
+    JOIN kalshi_markets km ON km.id = s.kalshi_market_id
     GROUP BY km.market_type, km.period
     ORDER BY n DESC
   `);

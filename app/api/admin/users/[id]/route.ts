@@ -68,7 +68,6 @@ export async function PATCH(
     ai_quota_daily?: number;
     repoll_quota_daily?: number;
     password?: string;
-    bankroll_dollars?: number;
   };
   try {
     body = await req.json();
@@ -120,7 +119,6 @@ export async function PATCH(
         role: body.role,
         ai_quota_daily: body.ai_quota_daily,
         repoll_quota_daily: body.repoll_quota_daily,
-        bankroll_dollars: body.bankroll_dollars,
       });
       break;
   }

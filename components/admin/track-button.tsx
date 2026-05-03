@@ -34,10 +34,10 @@ export function TrackButton({
     startTransition(async () => {
       try {
         const res = tracked
-          ? await fetch(`/api/admin/bets/by-signal/${signalId}`, {
+          ? await fetch(`/api/admin/tracked/${signalId}`, {
               method: "DELETE",
             })
-          : await fetch(`/api/admin/bets`, {
+          : await fetch(`/api/admin/tracked`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ signal_id: signalId }),

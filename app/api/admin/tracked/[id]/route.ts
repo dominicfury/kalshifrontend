@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 
-import { deleteBetBySignalId } from "@/lib/bets";
 import { isSameOrigin, requireAdmin } from "@/lib/session";
+import { untrackSignal } from "@/lib/tracked";
 
 export const runtime = "nodejs";
 
 /**
- * DELETE /api/admin/bets/by-signal/[id]
+ * DELETE /api/admin/tracked/[id]
+ *   id: signal_id
  *
- * Untrack a signal. Idempotent — returns ok even if no bet existed.
+ * Untrack a signal. Idempotent — returns ok even if it wasn't tracked.
  */
 export async function DELETE(
   req: Request,
@@ -27,7 +28,7 @@ export async function DELETE(
   }
 
   try {
-    const removed = await deleteBetBySignalId(signal_id);
+    const removed = await untrackSignal(signal_id);
     return NextResponse.json({ tracked: false, removed });
   } catch (e) {
     return NextResponse.json(
