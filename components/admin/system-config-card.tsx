@@ -122,7 +122,7 @@ const SIGNAL_FIELD_DEFS: Array<{
   {
     key: "book_quote_max_age_sec",
     label: "Book quote max age",
-    hint: "Drop book quotes older than this from the matcher consensus. Catches line-drift: when a book moves from line 5.5 → 5.0, their old 5.5 quote shouldn't count toward the 5.5 consensus. Default 3600 (1h). Lower = stricter staleness (drops lagging books faster), higher = more permissive.",
+    hint: "Drop book quotes older than this from the matcher consensus. With cross-line interpolation handling line drift directly, the cutoff is now about admitting books that briefly lag the poll cycle (rate limit, hiccup) without dropping them as stale. Default 7200 (2h, ~12 cycles of headroom). Lower = stricter (drops lagging books faster).",
     unit: "sec",
   },
 ];
