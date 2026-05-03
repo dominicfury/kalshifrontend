@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { sendEmail, verificationEmail } from "@/lib/email";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+  import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getBool, KNOWN_KEYS } from "@/lib/system-config";
 import { verifyTurnstile } from "@/lib/turnstile";
 import {
   createUser,
@@ -36,6 +37,16 @@ function isOkUsername(s: string): boolean {
 }
 
 export async function POST(req: Request) {
+  // Admin-controlled gate — checked before any work so a closed signup
+  // can't burn CAPTCHA budget, hit the DB, or send emails.
+  const signupsOpen = await getBool(KNOWN_KEYS.SIGNUPS_ENABLED, true);
+  if (!signupsOpen) {
+    return NextResponse.json(
+      { error: "signups are currently closed" },
+      { status: 403 },
+    );
+  }
+
   let body: {
     username?: string;
     email?: string;

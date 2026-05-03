@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   Brain,
   LineChart,
+  Lock,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -73,7 +74,7 @@ const SAMPLE_ROWS = [
 ];
 
 
-function LandingHeader() {
+function LandingHeader({ signupsOpen }: { signupsOpen: boolean }) {
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/55">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
@@ -107,12 +108,23 @@ function LandingHeader() {
           >
             Log in
           </Link>
-          <Link
-            href="/signup"
-            className="rounded-md bg-orange-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition-colors hover:bg-orange-400"
-          >
-            Sign up
-          </Link>
+          {signupsOpen ? (
+            <Link
+              href="/signup"
+              className="rounded-md bg-orange-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm shadow-orange-500/20 transition-colors hover:bg-orange-400"
+            >
+              Sign up
+            </Link>
+          ) : (
+            <span
+              aria-label="Signups are currently closed"
+              title="Signups are currently closed"
+              className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-500"
+            >
+              <Lock className="size-3.5" />
+              Signups closed
+            </span>
+          )}
         </nav>
       </div>
     </header>
@@ -217,10 +229,10 @@ function SignalPreview() {
 }
 
 
-export function LandingPage() {
+export function LandingPage({ signupsOpen = true }: { signupsOpen?: boolean }) {
   return (
     <div className="relative flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
-      <LandingHeader />
+      <LandingHeader signupsOpen={signupsOpen} />
 
       <main className="flex-1">
         {/* Hero */}
@@ -242,24 +254,50 @@ export function LandingPage() {
               WNBA contracts against a multi-book sportsbook consensus — and
               proves itself with closing-line value, not P&amp;L theater.
             </p>
-            <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link
-                href="/signup"
-                className="group inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition-all hover:-translate-y-0.5 hover:bg-orange-400 hover:shadow-orange-500/30 sm:w-auto"
-              >
-                Get started
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/login"
-                className="inline-flex w-full items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/60 px-5 py-3 text-sm font-medium text-zinc-100 transition-colors hover:border-zinc-600 hover:bg-zinc-800 hover:text-white sm:w-auto"
-              >
-                I have an account
-              </Link>
-            </div>
-            <p className="mt-5 text-xs text-zinc-400">
-              New accounts are reviewed by an admin within 12 hours.
-            </p>
+            {signupsOpen ? (
+              <>
+                <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                  <Link
+                    href="/signup"
+                    className="group inline-flex w-full items-center justify-center gap-2 rounded-md bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition-all hover:-translate-y-0.5 hover:bg-orange-400 hover:shadow-orange-500/30 sm:w-auto"
+                  >
+                    Get started
+                    <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                  <Link
+                    href="/login"
+                    className="inline-flex w-full items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/60 px-5 py-3 text-sm font-medium text-zinc-100 transition-colors hover:border-zinc-600 hover:bg-zinc-800 hover:text-white sm:w-auto"
+                  >
+                    I have an account
+                  </Link>
+                </div>
+                <p className="mt-5 text-xs text-zinc-400">
+                  New accounts are reviewed by an admin within 12 hours.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                  <span
+                    aria-label="Signups are currently closed"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 px-5 py-3 text-sm font-semibold text-zinc-400 sm:w-auto"
+                  >
+                    <Lock className="size-4" />
+                    Signups currently closed
+                  </span>
+                  <Link
+                    href="/login"
+                    className="inline-flex w-full items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/60 px-5 py-3 text-sm font-medium text-zinc-100 transition-colors hover:border-zinc-600 hover:bg-zinc-800 hover:text-white sm:w-auto"
+                  >
+                    I have an account
+                  </Link>
+                </div>
+                <p className="mt-5 text-xs text-zinc-400">
+                  New account creation is paused. Check back soon — existing
+                  users can still log in.
+                </p>
+              </>
+            )}
           </div>
 
           <SignalPreview />

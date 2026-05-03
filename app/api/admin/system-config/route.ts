@@ -49,15 +49,15 @@ export async function POST(req: Request) {
         );
       }
     }
-    // Sport toggles are strict booleans-as-strings.
-    if (/^sport_enabled_/.test(e.key)) {
+    // Sport toggles + the public signup gate are strict booleans-as-strings.
+    if (/^sport_enabled_/.test(e.key) || e.key === "signups_enabled") {
       if (e.value !== "0" && e.value !== "1") {
         return NextResponse.json(
           { error: `${e.key} must be "0" or "1"` },
           { status: 400 },
         );
       }
-      touchedSportToggle = true;
+      if (/^sport_enabled_/.test(e.key)) touchedSportToggle = true;
     }
     await setValue(e.key, e.value, admin.sub);
   }
