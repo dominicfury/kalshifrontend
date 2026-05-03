@@ -227,21 +227,27 @@ export async function fetchRecentSignals(
   // Default ("Live") view — show what's actionable RIGHT NOW. Filters:
   //   1. PRE-GAME: event hasn't started yet (you can't bet a game in progress)
   //   2. NOT CLOSED: closing line not yet recorded
-  //   3. NOT HUGE: edge < 5% (huge edges are almost always data bugs per spec §2)
-  //   4. AT-SIZE PASS: edge_at_size also ≥ 0.5% (fillable, not phantom edge)
-  //   5. FILLABLE: depth on the +EV side ≥ $50. Mirrors backend
+  //   3. AT-SIZE PASS: edge_at_size ≥ 0.5% (fillable, not phantom edge)
+  //   4. FILLABLE: depth on the +EV side ≥ $50. Mirrors backend
   //      `min_book_depth_dollars` (config.py) — keep them in sync so a
   //      future backend tweak doesn't surface rows here that the engine
   //      had previously rejected (or vice-versa hide them).
   //      yes_book_depth column stores side-relevant depth as of v2.
-  //   6. MULTI-BOOK CONSENSUS: ≥ 2 books in the devig.
-  //   7. ACTIVELY POLLED: latest kalshi_quote.polled_at within the last
+  //   5. MULTI-BOOK CONSENSUS: ≥ 2 books in the devig.
+  //   6. ACTIVELY POLLED: latest kalshi_quote.polled_at within the last
   //      8 minutes. This replaces the old detected_at-based recency cap.
   //      detected_at was a PROXY for "is the market still being polled,"
   //      and the proxy broke whenever signal generation skipped a market
   //      (filter A reject, COLD sport, etc.). Joining the live quote
   //      table answers the question directly — if Kalshi is being polled
   //      for this market, the signal is current.
+  //
+  // The huge-edge cutoff (edge < 5%) was removed by user request: real
+  // edges in sparse-coverage markets (e.g. WNBA, niche tennis) routinely
+  // sit at 5-10% and are worth surfacing. The user can triage via the
+  // depth + n_books columns + the amber-tint warning in app/page.tsx
+  // (isHugeEdge → bg-amber-950/20). For NHL/NBA/MLB with 20+ book
+  // consensus, edges that big still mean "treat with deep suspicion."
   //
   // We deliberately do NOT filter on:
   //   - kalshi_staleness_sec: generate_signals already rejects via the
@@ -253,7 +259,6 @@ export async function fetchRecentSignals(
   // Visible via ?all=1 for full audit trail / CLV bucket review.
   if (!filters.showAll) {
     where.push("s.closing_kalshi_yes_price IS NULL");
-    where.push("s.edge_pct_after_fees < 0.05");
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
     where.push("s.yes_book_depth >= 50");
     where.push("s.n_books_used >= 2");
