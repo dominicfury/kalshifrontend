@@ -25,6 +25,11 @@ export const KNOWN_KEYS = {
   ODDS_QUOTA_RESERVE: "odds_quota_reserve",
   USER_REPOLL_QUOTA_DAILY: "user_repoll_quota_daily",
   SIGNUPS_ENABLED: "signups_enabled",
+  // Signal-pipeline knobs exposed in /settings — admin-tunable without
+  // a backend redeploy. See scripts/generate_signals.py for usage.
+  BOOK_RECENT_MOVE_SEC: "book_recent_move_sec",
+  SIGNAL_HEARTBEAT_MIN: "signal_heartbeat_min",
+  TARGET_BET_SIZE_DOLLARS: "target_bet_size_dollars",
   SPORT_ENABLED_NHL: "sport_enabled_nhl",
   SPORT_ENABLED_NBA: "sport_enabled_nba",
   SPORT_ENABLED_MLB: "sport_enabled_mlb",
@@ -35,11 +40,14 @@ export const KNOWN_KEYS = {
 
 export const DEFAULT_VALUES: Record<string, string> = {
   [KNOWN_KEYS.KALSHI_POLL_INTERVAL_SEC]: "30",
-  [KNOWN_KEYS.BOOK_POLL_INTERVAL_SEC]: "1800",
+  [KNOWN_KEYS.BOOK_POLL_INTERVAL_SEC]: "600",
   [KNOWN_KEYS.DEFAULT_AI_QUOTA_DAILY]: "10",
-  [KNOWN_KEYS.ODDS_QUOTA_RESERVE]: "1000",
+  [KNOWN_KEYS.ODDS_QUOTA_RESERVE]: "2000",
   [KNOWN_KEYS.USER_REPOLL_QUOTA_DAILY]: "0",
   [KNOWN_KEYS.SIGNUPS_ENABLED]: "1",
+  [KNOWN_KEYS.BOOK_RECENT_MOVE_SEC]: "120",
+  [KNOWN_KEYS.SIGNAL_HEARTBEAT_MIN]: "10",
+  [KNOWN_KEYS.TARGET_BET_SIZE_DOLLARS]: "200",
   [KNOWN_KEYS.SPORT_ENABLED_NHL]: "1",
   [KNOWN_KEYS.SPORT_ENABLED_NBA]: "1",
   [KNOWN_KEYS.SPORT_ENABLED_MLB]: "1",
