@@ -119,6 +119,12 @@ const SIGNAL_FIELD_DEFS: Array<{
     hint: "Hide signals at or above this edge from the Live view (still visible in ?all=1). Default 7 lets sparse-coverage edges (5-7%, common in WNBA / niche tennis) through while filtering 10%+ line-drift traps where sharp books moved off the line. Set to 100 to disable.",
     unit: "count",
   },
+  {
+    key: "book_quote_max_age_sec",
+    label: "Book quote max age",
+    hint: "Drop book quotes older than this from the matcher consensus. Catches line-drift: when a book moves from line 5.5 → 5.0, their old 5.5 quote shouldn't count toward the 5.5 consensus. Default 3600 (1h). Lower = stricter staleness (drops lagging books faster), higher = more permissive.",
+    unit: "sec",
+  },
 ];
 
 const ACCESS_FIELD_DEFS: Array<{
