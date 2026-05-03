@@ -1,99 +1,29 @@
-import {
-  Activity,
-  ArrowRight,
-  BadgeCheck,
-  Brain,
-  LineChart,
-  Lock,
-  ShieldCheck,
-  Sparkles,
-  TrendingUp,
-} from "lucide-react";
+import { ArrowRight, Lock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-
-
-const FEATURES = [
-  {
-    icon: Brain,
-    title: "Multi-book consensus",
-    body:
-      "Sportsbook odds across Pinnacle, DraftKings, FanDuel, and more — devigged and weighted into a fair-value oracle for every Kalshi market.",
-  },
-  {
-    icon: Activity,
-    title: "Live signal feed",
-    body:
-      "Kalshi NHL, NBA, MLB, and WNBA contracts priced below fair value, refreshed every poll cycle, with edge-at-fillable-size and depth.",
-  },
-  {
-    icon: BadgeCheck,
-    title: "CLV-tracked validation",
-    body:
-      "Closing line value recorded on every signal. CLV converges to truth in 50–100 signals — long before P&L can.",
-  },
-  {
-    icon: Sparkles,
-    title: "AI explanations",
-    body:
-      "Plain-English breakdown of any signal: column-by-column meaning, why it's flagged, exact placement instructions, biggest risks.",
-  },
-];
-
-// Static visual sample of what a row in the live signal feed looks like.
-// Not a screenshot — an annotated mock that loads instantly and adapts to
-// the user's color scheme tokens.
-const SAMPLE_ROWS = [
-  {
-    sport: "NHL",
-    matchup: "Bruins @ Rangers",
-    bet: "Rangers ML · YES",
-    price: "0.485",
-    fair: "0.512",
-    edge: "+2.7%",
-    badge: "fresh",
-  },
-  {
-    sport: "NBA",
-    matchup: "Heat @ Celtics",
-    bet: "Over 213.5 · NO",
-    price: "0.472",
-    fair: "0.494",
-    edge: "+2.3%",
-    badge: "fresh",
-  },
-  {
-    sport: "MLB",
-    matchup: "Dodgers @ Giants",
-    bet: "Dodgers ML · YES",
-    price: "0.612",
-    fair: "0.634",
-    edge: "+1.8%",
-    badge: null,
-  },
-];
 
 
 function LandingHeader({ signupsOpen }: { signupsOpen: boolean }) {
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/55">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2.5 sm:px-6 sm:py-3">
         <Link
           href="/"
-          className="flex items-center gap-3"
+          className="flex items-center"
           aria-label="Sportsbetbrain home"
         >
+          {/* Match the authenticated header's logo dimensions
+              (app/layout.tsx) so the brand reads at the same scale
+              before and after sign-in. The image carries the wordmark
+              at this size, so no separate text label is needed. */}
           <Image
             src="/logo.png"
-            alt=""
+            alt="Sportsbetbrain"
             width={474}
             height={530}
             priority
-            className="h-9 w-auto sm:h-11"
+            className="h-[108px] w-auto sm:h-[120px]"
           />
-          <span className="hidden text-sm font-semibold tracking-tight text-white sm:inline">
-            Sportsbetbrain
-          </span>
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
           <Link
@@ -153,77 +83,6 @@ function HeroBackground() {
           backgroundSize: "56px 56px",
         }}
       />
-    </div>
-  );
-}
-
-
-function SignalPreview() {
-  return (
-    <div className="relative mx-auto mt-16 w-full max-w-3xl">
-      <div className="absolute inset-x-6 -bottom-4 -z-10 h-12 rounded-full bg-orange-500/20 blur-2xl" />
-      <div
-        role="img"
-        aria-label="Sample of the live signal feed: three rows showing sport, matchup, bet, price, fair value, and edge."
-        className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 shadow-2xl shadow-black/40 backdrop-blur"
-      >
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5 text-[10px] uppercase tracking-[0.18em] text-zinc-400">
-          <span className="inline-flex items-center gap-2">
-            <span className="inline-block size-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_1px_rgba(16,185,129,0.6)]" />
-            live · refreshing
-          </span>
-          <span className="hidden font-mono text-zinc-500 sm:inline">
-            polled 12s ago
-          </span>
-        </div>
-        <table className="w-full text-sm">
-          <thead className="border-b border-zinc-800 bg-zinc-900/60 text-[10px] uppercase tracking-[0.12em] text-zinc-400">
-            <tr>
-              <th className="px-3 py-2 text-left font-medium">Sport</th>
-              <th className="px-3 py-2 text-left font-medium">Matchup</th>
-              <th className="px-3 py-2 text-left font-medium">Bet</th>
-              <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">
-                Price
-              </th>
-              <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">
-                Fair
-              </th>
-              <th className="px-3 py-2 text-right font-medium">Edge</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/80">
-            {SAMPLE_ROWS.map((r) => (
-              <tr key={r.matchup} className="transition-colors hover:bg-zinc-900/60">
-                <td className="px-3 py-2.5">
-                  <span className="rounded bg-zinc-800/80 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-zinc-200">
-                    {r.sport}
-                  </span>
-                </td>
-                <td className="px-3 py-2.5 text-zinc-100">{r.matchup}</td>
-                <td className="px-3 py-2.5">
-                  <span className="rounded bg-orange-500/10 px-1.5 py-0.5 font-mono text-[11px] text-orange-200 ring-1 ring-orange-500/20">
-                    {r.bet}
-                  </span>
-                </td>
-                <td className="hidden px-3 py-2.5 text-right font-mono tabular-nums text-zinc-200 sm:table-cell">
-                  {r.price}
-                </td>
-                <td className="hidden px-3 py-2.5 text-right font-mono tabular-nums text-zinc-300 sm:table-cell">
-                  {r.fair}
-                </td>
-                <td className="px-3 py-2.5 text-right">
-                  <span className="rounded bg-emerald-500/15 px-2 py-0.5 font-mono text-xs font-semibold text-emerald-200 ring-1 ring-emerald-500/30">
-                    {r.edge}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="border-t border-zinc-800 bg-zinc-950/60 px-4 py-2 text-[10px] text-zinc-500">
-          Sample preview · live data after sign-in
-        </div>
-      </div>
     </div>
   );
 }
@@ -299,80 +158,6 @@ export function LandingPage({ signupsOpen = true }: { signupsOpen?: boolean }) {
               </>
             )}
           </div>
-
-          <SignalPreview />
-        </section>
-
-        {/* Stats strip */}
-        <section className="px-4 pb-16 sm:px-6">
-          <div className="mx-auto grid max-w-5xl gap-px overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-800/60 sm:grid-cols-3">
-            <Stat label="Books in consensus" value="9+" sub="incl. Pinnacle, Circa" />
-            <Stat label="Refresh cadence" value="60s" sub="auto · visibility-aware" />
-            <Stat label="Validation horizon" value="50–100 signals" sub="for stable CLV signal" />
-          </div>
-        </section>
-
-        {/* Features */}
-        <section className="px-4 pb-20 sm:px-6">
-          <div className="mx-auto max-w-6xl">
-            <div className="mb-10 max-w-2xl">
-              <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-                Built like a desk, not a content site
-              </h2>
-              <p className="mt-3 text-base leading-relaxed text-zinc-300">
-                Every column on the table answers a question a serious trader
-                would ask before clicking buy. Nothing that looks impressive
-                but isn&apos;t.
-              </p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {FEATURES.map((f) => (
-                <article
-                  key={f.title}
-                  className="group rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 transition-colors hover:border-zinc-700 hover:bg-zinc-900"
-                >
-                  <div className="mb-4 inline-flex size-10 items-center justify-center rounded-lg bg-orange-500/10 text-orange-300 ring-1 ring-orange-500/20">
-                    <f.icon className="size-5" />
-                  </div>
-                  <h3 className="text-base font-semibold text-white">
-                    {f.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">
-                    {f.body}
-                  </p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Process */}
-        <section className="border-t border-zinc-800 bg-zinc-950 px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-5xl">
-            <h2 className="mb-10 max-w-2xl text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              How a signal gets to your screen
-            </h2>
-            <ol className="grid gap-4 sm:grid-cols-3">
-              <ProcessStep
-                index="01"
-                icon={<TrendingUp className="size-5" />}
-                title="Pull odds"
-                body="Polled every minute from Kalshi and from a panel of sportsbooks. Stale quotes are dropped before they pollute the consensus."
-              />
-              <ProcessStep
-                index="02"
-                icon={<LineChart className="size-5" />}
-                title="Devig & price"
-                body="Each book is devigged independently, then weighted into a fair-value probability. Fees are subtracted on both legs — the edge you see is the edge you'd realize."
-              />
-              <ProcessStep
-                index="03"
-                icon={<ShieldCheck className="size-5" />}
-                title="Gate & ship"
-                body="Signal must clear edge, depth, multi-book, and freshness checks. CLV is recorded the moment the line closes — every call gets graded."
-              />
-            </ol>
-          </div>
         </section>
 
         {/* Disclaimer */}
@@ -405,56 +190,5 @@ export function LandingPage({ signupsOpen = true }: { signupsOpen?: boolean }) {
         </div>
       </footer>
     </div>
-  );
-}
-
-
-function Stat({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <div className="bg-zinc-950 px-6 py-6 text-center sm:py-8">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-400">
-        {label}
-      </div>
-      <div className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-        {value}
-      </div>
-      <div className="mt-1 text-xs text-zinc-400">{sub}</div>
-    </div>
-  );
-}
-
-
-function ProcessStep({
-  index,
-  icon,
-  title,
-  body,
-}: {
-  index: string;
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-}) {
-  return (
-    <li className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
-      <div className="flex items-center gap-3 text-orange-300">
-        <span className="font-mono text-xs tracking-widest text-zinc-500">
-          {index}
-        </span>
-        <span className="inline-flex size-8 items-center justify-center rounded-md bg-orange-500/10 ring-1 ring-orange-500/20">
-          {icon}
-        </span>
-      </div>
-      <h3 className="mt-4 text-base font-semibold text-white">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-zinc-300">{body}</p>
-    </li>
   );
 }
