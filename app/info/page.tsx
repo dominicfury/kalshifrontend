@@ -73,7 +73,7 @@ const COLUMNS: ColumnDef[] = [
     reading:
       "The headline edge number. 1–3% is the trustworthy zone — that's where real edges typically live. 0.5–1% is marginal but worth tracking.",
     redFlag:
-      ">5% almost always means a data bug, settlement-rule mismatch, or news you haven't seen. Hidden by default; visible with ?all=1.",
+      ">5% almost always means a data bug, settlement-rule mismatch, or news you haven't seen. Hidden by default; visible in the Recent (24h) view.",
   },
   {
     label: "@ size",

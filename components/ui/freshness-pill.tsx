@@ -26,7 +26,7 @@ function parseIsoMs(iso: string): number {
  *   🟢 ≤60s, 🟡 60–300s, 🔴 >5min
  *
  * The Live filter rejects rows older than 3 min, so the red state only shows
- * in ?all=1 mode.
+ * in Recent / Audit views.
  */
 function FreshnessPillImpl({
   // Server-side baseline values (computed at render time).

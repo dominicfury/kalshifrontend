@@ -43,7 +43,7 @@ function buildHref(current: SignalFilters, patch: Partial<SignalFilters>): strin
   }
   if (merged.alertedOnly) params.set("alerted", "1");
   if (merged.unresolvedOnly) params.set("unresolved", "1");
-  if (merged.showAll) params.set("all", "1");
+  if (merged.view && merged.view !== "live") params.set("view", merged.view);
   if (merged.sport) params.set("sport", merged.sport);
   const qs = params.toString();
   return qs ? `/?${qs}` : "/";
@@ -178,10 +178,12 @@ export function SignalFilterBar({
   filters,
   total,
   sports = [],
+  isAdmin = false,
 }: {
   filters: SignalFilters;
   total: number;
   sports?: { sport: string; n: number }[];
+  isAdmin?: boolean;
 }) {
   const anyFilter =
     filters.todayOnly ||
@@ -190,7 +192,9 @@ export function SignalFilterBar({
     filters.unresolvedOnly ||
     !!filters.sport;
 
-  const viewSummary = filters.showAll ? "All" : "Live";
+  const view = filters.view ?? "live";
+  const viewSummary =
+    view === "live" ? "Live" : view === "recent" ? "Recent (24h)" : "Audit";
 
   const edgePreset = MIN_EDGE_PRESETS.find((p) => p.value === filters.minEdge);
   const edgeSummary = edgePreset?.label ?? "any";
@@ -213,21 +217,30 @@ export function SignalFilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* View — Live vs All. Conceptually a primary toggle, but rendered
-          as a dropdown for visual consistency with the other filters. */}
-      <Dropdown label="View" summary={viewSummary} active={!!filters.showAll}>
+      {/* View — Live / Recent / Audit. Conceptually a primary toggle, but
+          rendered as a dropdown for visual consistency. Audit is admin-only
+          (raw detection dump, useful for debugging the pipeline). */}
+      <Dropdown label="View" summary={viewSummary} active={view !== "live"}>
         <MenuItem
           label="Live"
-          hint="Pre-game, fillable, edge under 5%"
-          active={!filters.showAll}
-          href={buildHref(filters, { showAll: false })}
+          hint="Actionable now: pre-game, fillable, edge under cutoff, freshly polled"
+          active={view === "live"}
+          href={buildHref(filters, { view: "live" })}
         />
         <MenuItem
-          label="All"
-          hint="Includes closed, started, flagged ≥5%, and signals from games up to 12h ago"
-          active={!!filters.showAll}
-          href={buildHref(filters, { showAll: true })}
+          label="Recent (24h)"
+          hint="Last 24h of signals that ever passed Live's filters — including invalidated, closed, and resolved"
+          active={view === "recent"}
+          href={buildHref(filters, { view: "recent" })}
         />
+        {isAdmin && (
+          <MenuItem
+            label="Audit"
+            hint="Every detection row, no dedup, no display filters. Admin-only — useful for analyzing edge persistence and heartbeat cadence."
+            active={view === "audit"}
+            href={buildHref(filters, { view: "audit" })}
+          />
+        )}
       </Dropdown>
 
       <Dropdown

@@ -75,13 +75,21 @@ The default list shows only signals that meet ALL of these:
 - **At least 2 books in the consensus** (single-book "consensus" is one bookmaker's opinion — high uncertainty bars on fair value)
 - **Latest detection per (market, side)** — duplicates collapsed
 
-Even with `?all=1`, signals whose underlying game started **more than
+In every view, signals whose underlying game started **more than
 12 hours ago** are hidden from the table. The rows stay in the DB so
 the admin's CLV tab and audit queries still see them; the live ledger
 just has no reason to display week-old closed signals.
 
-To see everything (huge edges, started games, closed signals — useful
-for CLV-bucket investigation), append `?all=1` to the URL.
+The View dropdown has three modes:
+
+- **Live** (default) — only what's actionable right now (the filters above).
+- **Recent (24h)** — same display gates as Live, but includes signals from
+  the last 24h that have since been invalidated by re-eval, closed (game
+  over), or resolved (WIN/LOSS). Useful for "what fired earlier and what
+  happened to it."
+- **Audit** (admin-only) — every detection row, no dedup, no display
+  filters. For analyzing edge persistence and heartbeat cadence on a
+  specific market.
 
 ### Sport activity strip
 
@@ -195,4 +203,4 @@ domain (admin issue, not yours).
 **"The signals table is empty."** Could be a quiet window (no games in
 the next few hours, or all current edges below threshold). Check the
 sport activity strip — if everything is ⚪ dark, no games are scheduled.
-Toggle `?all=1` to confirm there's data underneath.
+Switch the View dropdown to "Recent (24h)" to confirm there's data underneath.

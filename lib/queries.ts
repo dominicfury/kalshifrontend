@@ -63,6 +63,10 @@ const SignalRowSchema = z.object({
   clv_pct: numLikeNullable,
   resolved_outcome: z.enum(["yes", "no", "void"]).nullable(),
   hypothetical_pnl: numLikeNullable,
+  // Set by generate_signals when re-evaluation finds the original edge no
+  // longer holds (B/C/D failed at re-eval). Only surfaced in Recent / Audit
+  // views — Live filters these rows out entirely.
+  invalidated_at: z.string().nullable(),
   ticker: z.string(),
   market_type: z.string(),
   period: z.string(),
@@ -105,6 +109,7 @@ export interface SignalRow {
   clv_pct: number | null;
   resolved_outcome: "yes" | "no" | "void" | null;
   hypothetical_pnl: number | null;
+  invalidated_at: string | null;
   ticker: string;
   market_type: string;
   period: string;
@@ -122,7 +127,7 @@ export interface SignalRow {
   sport: string;
   // Minutes from now to event start — computed server-side so it stays
   // consistent with whatever clock the SQL filters use. Negative means
-  // already started (only visible via ?all=1 + 12h cutoff).
+  // already started (only visible in Recent / Audit + 12h cutoff).
   time_to_start_min: number;
   // Latest Kalshi quote freshness for this market — joined from
   // kalshi_quotes at query time, NOT a snapshot from detection. The
@@ -135,12 +140,25 @@ export interface SignalRow {
   tracked: number;
 }
 
+export type SignalView = "live" | "recent" | "audit";
+
 export interface SignalFilters {
   todayOnly?: boolean;       // detected today (UTC)
   minEdge?: number;          // edge_pct_after_fees >= minEdge
   alertedOnly?: boolean;     // alert_sent = 1
   unresolvedOnly?: boolean;  // resolved_outcome IS NULL
-  showAll?: boolean;         // false (default) = latest signal per market+side; true = full history
+  // View mode (default "live"):
+  //   live   — actionable now: pre-game, fillable, edge < huge-cutoff,
+  //            actively polled, not invalidated/closed. Deduped to one row
+  //            per (market, side).
+  //   recent — last 24h of signals that EVER passed Live's display gates
+  //            (edge < cutoff, edge_at_size ≥ 0.5%, depth ≥ $50, ≥ 2 books).
+  //            Deduped, INCLUDES invalidated / closed / resolved so the user
+  //            can see what fired and how it ended.
+  //   audit  — every detection row, no dedup, no display gates. Admin only;
+  //            non-admin requests should be clamped to "recent" by the
+  //            page handler before this query runs.
+  view?: SignalView;
   sport?: string;            // 'nhl' | 'nba' | 'mlb' | 'wnba' | 'tennis_atp' | 'tennis_wta'
 }
 
@@ -216,7 +234,7 @@ export async function fetchRecentSignals(
     args.push(filters.sport);
   }
   // Always: hide signals whose underlying game started > 12h ago, even
-  // in the ?all=1 view. The rows stay in the DB (the /clv tab queries
+  // in any view (Live / Recent / Audit). The rows stay in the DB (the /clv tab queries
   // run their own SQL and still see them), but the live ledger has no
   // reason to display week-old closed signals.
   where.push(
@@ -224,70 +242,72 @@ export async function fetchRecentSignals(
       "JOIN events e ON e.id = km.event_id " +
       "WHERE e.start_time > datetime('now', '-12 hours'))",
   );
-  // Default ("Live") view — show what's actionable RIGHT NOW. Filters:
-  //   1. PRE-GAME: event hasn't started yet (you can't bet a game in progress)
-  //   2. NOT CLOSED: closing line not yet recorded
-  //   3. AT-SIZE PASS: edge_at_size ≥ 0.5% (fillable, not phantom edge)
-  //   4. FILLABLE: depth on the +EV side ≥ $50. Mirrors backend
-  //      `min_book_depth_dollars` (config.py) — keep them in sync so a
-  //      future backend tweak doesn't surface rows here that the engine
-  //      had previously rejected (or vice-versa hide them).
-  //      yes_book_depth column stores side-relevant depth as of v2.
-  //   5. MULTI-BOOK CONSENSUS: ≥ 2 books in the devig.
-  //   6. ACTIVELY POLLED: latest kalshi_quote.polled_at within the last
-  //      8 minutes. This replaces the old detected_at-based recency cap.
-  //      detected_at was a PROXY for "is the market still being polled,"
-  //      and the proxy broke whenever signal generation skipped a market
-  //      (filter A reject, COLD sport, etc.). Joining the live quote
-  //      table answers the question directly — if Kalshi is being polled
-  //      for this market, the signal is current.
+  // Three view modes — see SignalFilters.view for semantics.
   //
-  // The huge-edge cutoff is admin-tunable via system_config
-  // (live_huge_edge_cutoff_pct, default 7). Sparse-coverage edges
-  // (WNBA, niche tennis with 5-6 books) can be legit at 5-7%; the
-  // 10%+ region is mostly line-drift traps where the sharp books
-  // moved off our matched line and our 4-book consensus is stale.
-  // Set to 100 to disable. Triage tools on the row: depth + n_books
-  // columns + amber-tint warning in app/page.tsx (isHugeEdge >= 5%).
+  // Live: show what's actionable RIGHT NOW. Filters:
+  //   1. PRE-GAME: event hasn't started yet (you can't bet in progress).
+  //   2. NOT CLOSED: closing line not yet recorded.
+  //   3. NOT INVALIDATED: re-eval hasn't dropped this signal below threshold.
+  //      Set by generate_signals when B/C/D fail at re-eval (line drift,
+  //      book moved, etc.) — see scripts/generate_signals.py.
+  //   4. EDGE < HUGE-CUTOFF: admin-tunable (live_huge_edge_cutoff_pct, 7%
+  //      default). Sparse-coverage edges (WNBA, niche tennis) can be legit
+  //      at 5-7%; 10%+ is usually line-drift / stale-data traps. Triaged
+  //      via the depth + n_books columns and amber row tint (≥5%).
+  //   5. AT-SIZE PASS: edge_at_size ≥ 0.5% (fillable, not phantom edge).
+  //   6. FILLABLE: depth on the +EV side ≥ $50. Mirrors backend
+  //      `min_book_depth_dollars`; keep in sync so a future backend tweak
+  //      doesn't surface rows the engine had previously rejected.
+  //   7. MULTI-BOOK: ≥ 2 books in the devig (Filter D).
+  //   8. ACTIVELY POLLED: latest kalshi_quote.polled_at within 8 minutes.
+  //      Replaces the old detected_at proxy — joining the live quote table
+  //      answers the question directly. 8m gives ~2.5x headroom over the
+  //      worst observed Kalshi cycle (150-210s) while hiding genuinely
+  //      abandoned markets.
   //
-  // We deliberately do NOT filter on:
+  // Recent (24h): same display gates as Live, but include rows that have
+  // since been invalidated, closed, or resolved (so the user sees what
+  // fired and how it ended). 24h detected_at floor; no poll-recency cap;
+  // no event-not-started cap (the global 12h cutoff handles old games).
+  //
+  // Audit: no extra filters at all. Caller must clamp non-admin requests
+  // to "recent" before this point — `view: "audit"` is the only state
+  // that bypasses the display gates entirely.
+  //
+  // We deliberately do NOT filter on staleness in any view:
   //   - kalshi_staleness_sec: generate_signals already rejects via the
   //     relative-staleness rule, so all stored signals satisfy this.
-  //   - book_staleness_sec: measures "time since the consensus PRICE
-  //     MOVED." With a 30-min book poll cadence a healthy quiet book
-  //     routinely sits at 1800–3600s, which is fine.
-  //
-  // Visible via ?all=1 for full audit trail / CLV bucket review.
-  if (!filters.showAll) {
+  //   - book_staleness_sec: measures "time since consensus price MOVED."
+  //     With a 30-min book poll cadence a healthy quiet book routinely
+  //     sits at 1800–3600s.
+  const view: SignalView = filters.view ?? "live";
+  if (view === "live") {
     const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
     where.push("s.closing_kalshi_yes_price IS NULL");
-    // invalidated_at is set by generate_signals when re-evaluation
-    // finds the edge has dropped below threshold (or depth/consensus
-    // failed). Hides stale-display signals where the original logged
-    // edge no longer reflects current book consensus.
     where.push("s.invalidated_at IS NULL");
     where.push("s.edge_pct_after_fees < ?");
     args.push(hugeEdgePct / 100.0);
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
     where.push("s.yes_book_depth >= 50");
     where.push("s.n_books_used >= 2");
-    // Live-quote recency cap. A full Kalshi poll cycle takes 150-210s
-    // in practice (~800 markets after tennis bootstrap, orderbook
-    // fetches concurrency-capped at 6). At a 5-min cap, the FIRST
-    // market polled in a slow cycle had only ~90-150s of headroom
-    // before falling out — a single tail-latency cycle would flicker
-    // rows out of Live and back in on the next poll. 8 minutes gives
-    // ~2.5x headroom over the observed worst case while still hiding
-    // genuinely abandoned markets (a market that hasn't been polled
-    // in 8+ minutes is either Kalshi-side broken or has been removed
-    // from our active set, neither of which is actionable).
     where.push("lq.polled_at >= datetime('now', '-8 minutes')");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
         "JOIN events e ON e.id = km.event_id " +
         "WHERE e.start_time > datetime('now'))",
     );
+  } else if (view === "recent") {
+    const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
+    where.push("s.edge_pct_after_fees < ?");
+    args.push(hugeEdgePct / 100.0);
+    where.push("s.edge_pct_after_fees_at_size >= 0.005");
+    where.push("s.yes_book_depth >= 50");
+    where.push("s.n_books_used >= 2");
+    where.push("s.detected_at >= datetime('now', '-24 hours')");
   }
+  // view === "audit": fall through with no extra conditions; the global
+  // 12h game cutoff above keeps the live ledger from including week-old
+  // closed signals.
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
@@ -307,10 +327,6 @@ export async function fetchRecentSignals(
     CAST((julianday('now') - julianday(lq.polled_at)) * 86400 AS INTEGER) AS live_quote_age_sec
   `;
 
-  // Default: collapse to one row per (market_id, side) — the most recent
-  // detection — so the ledger reads as "current open opportunities" instead
-  // of an audit log. showAll=true returns every detection (useful for
-  // analyzing edge persistence on a single market).
   // Tracked flag: a signal is "tracked" iff a row exists in
   // `tracked_signals` for its id. Pure marker — no fill price /
   // contracts / stake. CLV math reads s.clv_pct (filled by the
@@ -347,7 +363,10 @@ export async function fetchRecentSignals(
       AS book_staleness_sec
   `;
 
-  const baseSql = filters.showAll
+  // Dedup: collapse to one row per (market, side) for Live and Recent.
+  // Audit returns every detection so the admin can analyze edge persistence
+  // / heartbeat cadence on a single market.
+  const baseSql = view === "audit"
     ? `
         SELECT s.id, s.detected_at,
                s.kalshi_yes_ask, s.kalshi_no_ask, s.fair_yes_prob,
@@ -357,7 +376,7 @@ export async function fetchRecentSignals(
                ${LIVE_BOOK_STALE},
                s.match_confidence, s.alert_sent, s.n_books_used,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
-               s.hypothetical_pnl,
+               s.hypothetical_pnl, s.invalidated_at,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
                e.home_team, e.away_team, e.start_time, e.sport,
                CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min,
@@ -389,7 +408,7 @@ export async function fetchRecentSignals(
                ${LIVE_BOOK_STALE},
                s.match_confidence, s.alert_sent, s.n_books_used,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
-               s.hypothetical_pnl,
+               s.hypothetical_pnl, s.invalidated_at,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
                e.home_team, e.away_team, e.start_time, e.sport,
                CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min,
@@ -409,7 +428,7 @@ export async function fetchRecentSignals(
   // without having to sort one column then squint at the other.
   //
   // Started/past games go to the LAST bucket so they don't pollute the
-  // top of ?all=1 — a CLOSED row from 11h ago shouldn't share a bucket
+  // top of Recent / Audit — a CLOSED row from 11h ago shouldn't share a bucket
   // with a market tipping off in 30 min.
   const PROXIMITY_BUCKET = `
     CASE

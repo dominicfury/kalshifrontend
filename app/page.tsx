@@ -30,6 +30,7 @@ import {
   type SignalFilters,
   type SignalRow,
   type SignalSortKey,
+  type SignalView,
   type SportActivity,
 } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/session";
@@ -130,12 +131,17 @@ function parseFilters(sp: Record<string, string | string[] | undefined>): Signal
   };
   const minEdgeRaw = get("minEdge");
   const minEdge = minEdgeRaw ? Number(minEdgeRaw) : undefined;
+  const rawView = get("view");
+  const view: SignalView | undefined =
+    rawView === "live" || rawView === "recent" || rawView === "audit"
+      ? rawView
+      : undefined;
   return {
     todayOnly: get("today") === "1",
     minEdge: Number.isFinite(minEdge) ? minEdge : undefined,
     alertedOnly: get("alerted") === "1",
     unresolvedOnly: get("unresolved") === "1",
-    showAll: get("all") === "1",
+    view,
     sport: get("sport") || undefined,
   };
 }
@@ -200,7 +206,7 @@ function buildSortHref(
   }
   if (filters.alertedOnly) params.set("alerted", "1");
   if (filters.unresolvedOnly) params.set("unresolved", "1");
-  if (filters.showAll) params.set("all", "1");
+  if (filters.view && filters.view !== "live") params.set("view", filters.view);
   if (next.key !== DEFAULT_SORT.key || next.dir !== DEFAULT_SORT.dir) {
     params.set("sort", next.key);
     const naturalDir =
@@ -274,10 +280,10 @@ function LiveEmptyState({
           </Link>
         )}
         <Link
-          href="/?all=1"
+          href="/?view=recent"
           className="rounded-full border border-emerald-700/60 bg-emerald-900/20 px-3 py-1 text-emerald-300 hover:bg-emerald-900/40"
         >
-          View flagged signals →
+          See last 24h →
         </Link>
       </div>
     </div>
@@ -301,7 +307,18 @@ export default async function SignalsPage({
   }
 
   const sp = await searchParams;
-  const filters = parseFilters(sp);
+  const rawFilters = parseFilters(sp);
+  const isAdmin = me.role === "admin";
+  // Audit clamp: non-admin users requesting `?view=audit` (URL-typed or
+  // bookmarked) get downgraded to Recent. Audit's an unfiltered detection
+  // dump and only useful for debugging the pipeline — there's no reason
+  // to expose it to non-admin users, and the volume would be confusing.
+  const filters: SignalFilters = {
+    ...rawFilters,
+    view:
+      rawFilters.view === "audit" && !isAdmin ? "recent" : rawFilters.view,
+  };
+  const view: SignalView = filters.view ?? "live";
   const sort = parseSort(sp);
   const sortHref = (key: SignalSortKey, dir: "asc" | "desc") =>
     buildSortHref(sort, filters, { key, dir });
@@ -322,8 +339,12 @@ export default async function SignalsPage({
     error = e instanceof Error ? e.message : String(e);
   }
 
-  const isAdmin = me.role === "admin";
-  const showAll = !!filters.showAll;
+  // Show the diagnostic columns (K stale, B stale, CLV) and the Status
+  // column whenever we're outside the strict Live view — Recent shows
+  // historical state, Audit shows raw detection rows. Admins also see
+  // the diagnostics in Live (they always have for triage).
+  const showStatusCol = view !== "live";
+  const showDiagCols = isAdmin || view !== "live";
   // Anchor client-side freshness ticks to the moment this server payload was
   // built. Without this anchor, "5s old" stays "5s old" until the next refresh.
   // Date.now() is fine here — this runs on the server during SSR, not in a
@@ -365,6 +386,7 @@ export default async function SignalsPage({
         filters={filters}
         total={signals.length}
         sports={activeSports}
+        isAdmin={isAdmin}
       />
 
       {error && (
@@ -462,7 +484,7 @@ export default async function SignalsPage({
                 />
               </Th>
               {/* Admin or All-mode — extra columns for inspection. */}
-              {(isAdmin || showAll) && (
+              {showDiagCols && (
                 <>
                   <Th align="right" className="hidden lg:table-cell">
                     <SortHeader
@@ -498,7 +520,7 @@ export default async function SignalsPage({
               )}
               {/* Status — only meaningful in All mode (Live filter excludes
                   closed/resolved rows by definition). */}
-              {showAll && <Th>Status</Th>}
+              {showStatusCol && <Th>Status</Th>}
               {/* Track is admin-only — non-admins still see AI but no track icon. */}
               {isAdmin && <Th>Track</Th>}
               <Th>AI</Th>
@@ -592,7 +614,7 @@ export default async function SignalsPage({
                   <Td align="right" mono muted>
                     {s.n_books_used}
                   </Td>
-                  {(isAdmin || showAll) && (
+                  {showDiagCols && (
                     <>
                       <Td align="right" className="hidden lg:table-cell">
                         {stalenessCell(s.kalshi_staleness_sec, 600)}
@@ -605,25 +627,25 @@ export default async function SignalsPage({
                       </Td>
                     </>
                   )}
-                  {showAll && (
+                  {showStatusCol && (
                     <Td>
-                      {s.resolved_outcome === "yes" && (
+                      {s.resolved_outcome === "yes" ? (
                         <Badge variant="positive" mono>WIN</Badge>
-                      )}
-                      {s.resolved_outcome === "no" && (
+                      ) : s.resolved_outcome === "no" ? (
                         <Badge variant="negative" mono>LOSS</Badge>
-                      )}
-                      {s.resolved_outcome === "void" && (
+                      ) : s.resolved_outcome === "void" ? (
                         <Badge variant="muted" mono>VOID</Badge>
+                      ) : s.closing_kalshi_yes_price != null ? (
+                        <Badge variant="info" mono>CLOSED</Badge>
+                      ) : s.invalidated_at != null ? (
+                        // Re-eval found the edge no longer holds (B/C/D
+                        // failed). The signal was visible in Live until
+                        // this moment; Recent shows it as stamped-out so
+                        // the user can see what fired and how it ended.
+                        <Badge variant="muted" mono>INVALID</Badge>
+                      ) : (
+                        <Badge variant="outline" mono>OPEN</Badge>
                       )}
-                      {s.resolved_outcome == null &&
-                        s.closing_kalshi_yes_price != null && (
-                          <Badge variant="info" mono>CLOSED</Badge>
-                        )}
-                      {s.resolved_outcome == null &&
-                        s.closing_kalshi_yes_price == null && (
-                          <Badge variant="outline" mono>OPEN</Badge>
-                        )}
                     </Td>
                   )}
                   {isAdmin && (
