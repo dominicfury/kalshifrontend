@@ -301,6 +301,11 @@ export async function fetchRecentSignals(
     const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
     where.push("s.closing_kalshi_yes_price IS NULL");
     where.push("s.invalidated_at IS NULL");
+    // Exclude calibration rows (sub-actionable edge logged for CLV
+    // analysis only). Belt-and-suspenders with the at-size and touch
+    // thresholds — a row can be calibration-tagged when one leg passed
+    // 0.5% but the other didn't, which the size filter alone would miss.
+    where.push("s.is_calibration_only = 0");
     where.push("s.edge_pct_after_fees < ?");
     args.push(hugeEdgePct / 100.0);
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
@@ -314,6 +319,7 @@ export async function fetchRecentSignals(
     );
   } else if (view === "recent") {
     const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
+    where.push("s.is_calibration_only = 0");
     where.push("s.edge_pct_after_fees < ?");
     args.push(hugeEdgePct / 100.0);
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
