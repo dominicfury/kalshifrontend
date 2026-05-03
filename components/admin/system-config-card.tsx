@@ -2,6 +2,43 @@ import { listConfig } from "@/lib/system-config";
 
 import { SystemConfigEditor } from "./system-config-editor";
 
+
+/** Reference table rendered below the min_book_depth_dollars input —
+ *  reminds the admin to bump the depth filter alongside flat-bet size. */
+const DEPTH_FOR_BET_SIZE: Array<[string, string]> = [
+  ["$5–25", "50"],
+  ["$50–100", "100"],
+  ["$100–200", "200"],
+  ["$200–500", "500"],
+];
+
+function DepthReferenceTable() {
+  return (
+    <div className="mt-1.5 rounded-md border border-zinc-800 bg-zinc-950/60 p-2">
+      <div className="mb-1 text-[9px] uppercase tracking-[0.18em] text-zinc-500">
+        suggested by flat-bet size
+      </div>
+      <table className="w-full font-mono text-[10px] tabular-nums">
+        <thead>
+          <tr className="text-zinc-500">
+            <th className="pb-1 text-left font-normal">flat bet</th>
+            <th className="pb-1 text-right font-normal">depth ≥</th>
+          </tr>
+        </thead>
+        <tbody>
+          {DEPTH_FOR_BET_SIZE.map(([bet, depth]) => (
+            <tr key={bet} className="text-zinc-300">
+              <td className="py-0.5">{bet}</td>
+              <td className="py-0.5 text-right">${depth}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+
 const FIELD_DEFS: Array<{
   key: string;
   label: string;
@@ -37,6 +74,44 @@ const FIELD_DEFS: Array<{
     label: "User repoll quota / day",
     hint: "Manual repolls per non-admin user / day. 0 = disabled (admin always unlimited).",
     unit: "count",
+  },
+];
+
+
+// Signal-pipeline knobs (Filter A1 sensitivity, dedup heartbeat, EV
+// engine sizing, depth filter). These tune the trade-off between
+// "catch every edge" and "skip noise" without a backend redeploy.
+const SIGNAL_FIELD_DEFS: Array<{
+  key: string;
+  label: string;
+  hint: string;
+  unit: "sec" | "count" | "toggle";
+  extra?: React.ReactNode;
+}> = [
+  {
+    key: "book_recent_move_sec",
+    label: "Filter A1 trap window",
+    hint: "Books must have moved within this many seconds for the news-trap filter to fire. Lower = less aggressive A1, more signals through.",
+    unit: "sec",
+  },
+  {
+    key: "signal_heartbeat_min",
+    label: "Signal heartbeat (min)",
+    hint: "Minutes between fresh rows for a stable, edge-unchanged signal. Lower = more table bloat. Must stay below the Live view recency cap (~8 min).",
+    unit: "count",
+  },
+  {
+    key: "target_bet_size_dollars",
+    label: "Target bet size ($)",
+    hint: "Hypothetical fill size used to compute the @size edge column. Set to your typical flat-bet so the @size number reads as the edge you'd actually capture.",
+    unit: "count",
+  },
+  {
+    key: "min_book_depth_dollars",
+    label: "Min book depth ($)",
+    hint: "Filter C: reject signals where top-of-book depth on the +EV side is less than this. Bump as flat-bet size grows so the system stops surfacing signals you can't fill cleanly.",
+    unit: "count",
+    extra: <DepthReferenceTable />,
   },
 ];
 
@@ -108,6 +183,14 @@ export async function SystemConfigCard() {
     unit: d.unit,
     value: byKey.get(d.key)?.value ?? "",
   }));
+  const signalFields = SIGNAL_FIELD_DEFS.map((d) => ({
+    key: d.key,
+    label: d.label,
+    hint: d.hint,
+    unit: d.unit,
+    extra: d.extra,
+    value: byKey.get(d.key)?.value ?? "",
+  }));
   const accessFields = ACCESS_FIELD_DEFS.map((d) => ({
     key: d.key,
     label: d.label,
@@ -129,6 +212,18 @@ export async function SystemConfigCard() {
   return (
     <div className="space-y-6">
       <SystemConfigEditor fields={fields} />
+      <div className="space-y-2">
+        <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-300">
+          Signal pipeline
+        </div>
+        <p className="text-[11px] leading-snug text-zinc-500">
+          Tune Filter A1 sensitivity, dedup heartbeat, and the depth /
+          fill-size assumptions the EV engine uses. Track impact via the{" "}
+          <code className="rounded bg-zinc-900 px-1">signal_gen_runs</code>{" "}
+          funnel in the DB.
+        </p>
+        <SystemConfigEditor fields={signalFields} />
+      </div>
       <div className="space-y-2">
         <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-300">
           Access — toggle on/off

@@ -14,6 +14,11 @@ interface Field {
   hint: string;
   unit: FieldUnit;
   value: string;
+  // Optional rich content rendered below the hint — used for reference
+  // tables / charts that don't fit in a one-line hint string. Pure JSX
+  // only (no callbacks) since this lives on a server-component-passed
+  // payload to a client component.
+  extra?: React.ReactNode;
 }
 
 function describe(unit: FieldUnit, n: number): string {
@@ -108,6 +113,7 @@ export function SystemConfigEditor({ fields }: { fields: Field[] }) {
                   {on ? "Enabled" : "Disabled"}
                 </button>
                 <p className="text-[11px] leading-snug text-zinc-500">{f.hint}</p>
+                {f.extra}
               </div>
             );
           }
@@ -138,6 +144,7 @@ export function SystemConfigEditor({ fields }: { fields: Field[] }) {
                 )}
               />
               <p className="text-[11px] leading-snug text-zinc-500">{f.hint}</p>
+              {f.extra}
             </div>
           );
         })}
