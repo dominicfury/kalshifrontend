@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, Activity } from "lucide-react";
 import Link from "next/link";
 
 import { AIChatTrigger } from "@/components/ai/ai-chat";
+import { TrackButton } from "@/components/admin/track-button";
 import { LandingPage } from "@/components/landing/landing";
 import { AutoRefresh } from "@/components/layout/auto-refresh";
 import RepollButton from "@/components/layout/repoll-button";
@@ -498,6 +499,8 @@ export default async function SignalsPage({
               {/* Status — only meaningful in All mode (Live filter excludes
                   closed/resolved rows by definition). */}
               {showAll && <Th>Status</Th>}
+              {/* Track is admin-only — non-admins still see AI but no track icon. */}
+              {isAdmin && <Th>Track</Th>}
               <Th>AI</Th>
             </Tr>
           </THead>
@@ -621,6 +624,11 @@ export default async function SignalsPage({
                         s.closing_kalshi_yes_price == null && (
                           <Badge variant="outline" mono>OPEN</Badge>
                         )}
+                    </Td>
+                  )}
+                  {isAdmin && (
+                    <Td>
+                      <TrackButton signalId={s.id} tracked={s.tracked === 1} />
                     </Td>
                   )}
                   <Td>

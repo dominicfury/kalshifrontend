@@ -24,6 +24,9 @@ export interface UserRow {
   verified: boolean;
   verified_at: string | null;
   verified_by: number | null;
+  // Used by the +track button on signal rows. ¼-Kelly × bankroll = stake
+  // dollars; floor(stake / fill_price) = contracts written into bets row.
+  bankroll_dollars: number;
 }
 
 export interface UserWithHash extends UserRow {
@@ -66,12 +69,15 @@ function rowToUser(o: Record<string, unknown>): UserRow {
     verified: Number(o.verified ?? 0) === 1,
     verified_at: o.verified_at == null ? null : String(o.verified_at),
     verified_by: o.verified_by == null ? null : Number(o.verified_by),
+    bankroll_dollars:
+      o.bankroll_dollars == null ? 100 : Number(o.bankroll_dollars),
   };
 }
 
 const USER_SELECT_COLS = `id, username, email, role, ai_quota_daily,
   repoll_quota_daily, disabled, last_login_at, created_at,
-  email_verified, signup_method, verified, verified_at, verified_by`;
+  email_verified, signup_method, verified, verified_at, verified_by,
+  bankroll_dollars`;
 
 export async function findUserByUsername(
   username: string,
@@ -236,6 +242,7 @@ export async function updateUser(
     repoll_quota_daily?: number;
     disabled?: boolean;
     password?: string;
+    bankroll_dollars?: number;
   },
 ): Promise<UserRow | null> {
   const sets: string[] = [];
@@ -263,6 +270,10 @@ export async function updateUser(
   if (patch.password !== undefined) {
     sets.push("password_hash = ?");
     args.push(await bcrypt.hash(patch.password, 12));
+  }
+  if (patch.bankroll_dollars !== undefined) {
+    sets.push("bankroll_dollars = ?");
+    args.push(Math.max(0, patch.bankroll_dollars));
   }
   if (!sets.length) return findUserById(id);
   sets.push("updated_at = datetime('now')");

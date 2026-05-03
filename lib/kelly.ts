@@ -44,3 +44,22 @@ export function suggestedStakeFraction(
   if (fullKelly <= 0) return null;
   return 0.25 * fullKelly;
 }
+
+
+/** Concrete contract count for the +track button: floor(¼-Kelly × bankroll / fill_price).
+ *  Returns 0 if the signal isn't eligible for a stake suggestion (below 2% gate, etc.).
+ *  Never returns a fractional number — Kalshi only fills whole contracts. */
+export function suggestedContracts(
+  s: Pick<
+    import("@/lib/queries").SignalRow,
+    "side" | "fair_yes_prob" | "kalshi_yes_ask" | "kalshi_no_ask" | "edge_pct_after_fees"
+  >,
+  bankroll: number,
+): number {
+  const frac = suggestedStakeFraction(s);
+  if (frac == null || bankroll <= 0) return 0;
+  const fillPrice = s.side === "yes" ? s.kalshi_yes_ask : s.kalshi_no_ask;
+  if (fillPrice <= 0 || fillPrice >= 1) return 0;
+  const stakeDollars = bankroll * frac;
+  return Math.max(0, Math.floor(stakeDollars / fillPrice));
+}
