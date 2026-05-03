@@ -223,11 +223,14 @@ export async function fetchRecentSignals(
   //   2. NOT CLOSED: closing line not yet recorded
   //   3. NOT HUGE: edge < 5% (huge edges are almost always data bugs per spec §2)
   //   4. AT-SIZE PASS: edge_at_size also ≥ 0.5% (fillable, not phantom edge)
-  //   5. FILLABLE: depth on the +EV side ≥ $25 (spec §10 thin-book rule).
+  //   5. FILLABLE: depth on the +EV side ≥ $50. Mirrors backend
+  //      `min_book_depth_dollars` (config.py) — keep them in sync so a
+  //      future backend tweak doesn't surface rows here that the engine
+  //      had previously rejected (or vice-versa hide them).
   //      yes_book_depth column stores side-relevant depth as of v2.
   //   6. MULTI-BOOK CONSENSUS: ≥ 2 books in the devig.
   //   7. ACTIVELY POLLED: latest kalshi_quote.polled_at within the last
-  //      3 minutes. This replaces the old detected_at-based recency cap.
+  //      8 minutes. This replaces the old detected_at-based recency cap.
   //      detected_at was a PROXY for "is the market still being polled,"
   //      and the proxy broke whenever signal generation skipped a market
   //      (filter A reject, COLD sport, etc.). Joining the live quote
@@ -246,15 +249,19 @@ export async function fetchRecentSignals(
     where.push("s.closing_kalshi_yes_price IS NULL");
     where.push("s.edge_pct_after_fees < 0.05");
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
-    where.push("s.yes_book_depth >= 25");
+    where.push("s.yes_book_depth >= 50");
     where.push("s.n_books_used >= 2");
-    // Live-quote recency cap. A full Kalshi poll takes 150-200s in practice
-    // (400+ markets, concurrency-capped at 6 for orderbook fetches), so the
-    // gap between distinct poll moments routinely runs 150-210s. A 3-min
-    // cap was zeroing out the entire Live table whenever a poll ran long,
-    // producing a "rows disappear and reappear" flash on the dashboard.
-    // 5 minutes gives ~50% headroom over the worst-case observed gap.
-    where.push("lq.polled_at >= datetime('now', '-5 minutes')");
+    // Live-quote recency cap. A full Kalshi poll cycle takes 150-210s
+    // in practice (~800 markets after tennis bootstrap, orderbook
+    // fetches concurrency-capped at 6). At a 5-min cap, the FIRST
+    // market polled in a slow cycle had only ~90-150s of headroom
+    // before falling out — a single tail-latency cycle would flicker
+    // rows out of Live and back in on the next poll. 8 minutes gives
+    // ~2.5x headroom over the observed worst case while still hiding
+    // genuinely abandoned markets (a market that hasn't been polled
+    // in 8+ minutes is either Kalshi-side broken or has been removed
+    // from our active set, neither of which is actionable).
+    where.push("lq.polled_at >= datetime('now', '-8 minutes')");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
         "JOIN events e ON e.id = km.event_id " +
