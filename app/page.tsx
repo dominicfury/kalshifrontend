@@ -679,23 +679,37 @@ export default async function SignalsPage({
                   )}
                   {showStatusCol && (
                     <Td>
-                      {s.resolved_outcome === "yes" ? (
-                        <Badge variant="positive" mono>WIN</Badge>
-                      ) : s.resolved_outcome === "no" ? (
-                        <Badge variant="negative" mono>LOSS</Badge>
-                      ) : s.resolved_outcome === "void" ? (
-                        <Badge variant="muted" mono>VOID</Badge>
-                      ) : s.closing_kalshi_yes_price != null ? (
-                        <Badge variant="info" mono>CLOSED</Badge>
-                      ) : s.invalidated_at != null ? (
-                        // Re-eval found the edge no longer holds (B/C/D
-                        // failed). The signal was visible in Live until
-                        // this moment; Recent shows it as stamped-out so
-                        // the user can see what fired and how it ended.
-                        <Badge variant="muted" mono>INVALID</Badge>
-                      ) : (
-                        <Badge variant="outline" mono>OPEN</Badge>
-                      )}
+                      <div className="inline-flex items-center gap-1">
+                        {s.resolved_outcome === "yes" ? (
+                          <Badge variant="positive" mono>WIN</Badge>
+                        ) : s.resolved_outcome === "no" ? (
+                          <Badge variant="negative" mono>LOSS</Badge>
+                        ) : s.resolved_outcome === "void" ? (
+                          <Badge variant="muted" mono>VOID</Badge>
+                        ) : s.closing_kalshi_yes_price != null ? (
+                          <Badge variant="info" mono>CLOSED</Badge>
+                        ) : s.invalidated_at != null ? (
+                          // Re-eval found the edge no longer holds (B/C/D
+                          // failed). The signal was visible in Live until
+                          // this moment; Recent shows it as stamped-out so
+                          // the user can see what fired and how it ended.
+                          <Badge variant="muted" mono>INVALID</Badge>
+                        ) : (
+                          <Badge variant="outline" mono>OPEN</Badge>
+                        )}
+                        {s.is_calibration_only === 1 && (
+                          // Sub-actionable edge (0.1%-0.5%) — logged for
+                          // CLV calibration analysis but never displayed in
+                          // Live or Recent and never alerted. Visible only
+                          // in Audit.
+                          <span
+                            className="rounded border border-zinc-700 bg-zinc-900/60 px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-zinc-400"
+                            title="Calibration-only: edge was below 0.5% actionable threshold but above 0.1% logging floor. Recorded for offline CLV analysis; not surfaced in Live or alerted on."
+                          >
+                            calib
+                          </span>
+                        )}
+                      </div>
                     </Td>
                   )}
                   {isAdmin && (

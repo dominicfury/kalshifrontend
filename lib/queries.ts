@@ -68,6 +68,7 @@ const SignalRowSchema = z.object({
   // views — Live filters these rows out entirely.
   invalidated_at: z.string().nullable(),
   n_books_interpolated: intLike,
+  is_calibration_only: intLike,
   ticker: z.string(),
   market_type: z.string(),
   period: z.string(),
@@ -118,6 +119,13 @@ export interface SignalRow {
   // = every book interpolated (no exact-line match). Renders as an "interp"
   // badge in the Live row to flag assumption-heavy signals.
   n_books_interpolated: number;
+  // 1 = the signal's edge was below the actionable threshold (0.5%) but
+  // above the calibration threshold (0.1%). Logged for offline CLV
+  // analysis but not displayed in Live or Recent (the existing
+  // edge_pct_after_fees_at_size >= 0.005 filter already excludes them);
+  // visible in Audit with a "calib" badge so the admin can distinguish
+  // these from actionable rows.
+  is_calibration_only: number;
   ticker: string;
   market_type: string;
   period: string;
@@ -383,7 +391,7 @@ export async function fetchRecentSignals(
                ${LIVE_KALSHI_STALE},
                ${LIVE_BOOK_STALE},
                s.match_confidence, s.alert_sent, s.n_books_used,
-               s.n_books_interpolated,
+               s.n_books_interpolated, s.is_calibration_only,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl, s.invalidated_at,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
@@ -416,7 +424,7 @@ export async function fetchRecentSignals(
                ${LIVE_KALSHI_STALE},
                ${LIVE_BOOK_STALE},
                s.match_confidence, s.alert_sent, s.n_books_used,
-               s.n_books_interpolated,
+               s.n_books_interpolated, s.is_calibration_only,
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl, s.invalidated_at,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
