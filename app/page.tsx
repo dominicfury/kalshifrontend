@@ -94,6 +94,27 @@ function stalenessCell(sec: number | null, staleAt: number) {
 }
 
 
+// Relative time-ago string for the Detected column in Recent / Audit views.
+// SQLite datetime() emits UTC without a Z marker (e.g. "2026-05-03 05:11:18"),
+// so we manually append the marker before Date.parse so the browser doesn't
+// fall back to local-time interpretation.
+function formatAgo(iso: string, nowMs: number): string {
+  const parseable = iso.includes("T") ? iso : iso.replace(" ", "T") + "Z";
+  const t = Date.parse(parseable);
+  if (!Number.isFinite(t)) return "—";
+  const ageSec = Math.max(0, Math.floor((nowMs - t) / 1000));
+  if (ageSec < 60) return `${ageSec}s ago`;
+  const ageMin = Math.floor(ageSec / 60);
+  if (ageMin < 60) return `${ageMin}m ago`;
+  const h = Math.floor(ageMin / 60);
+  const m = ageMin % 60;
+  if (h < 24) return m === 0 ? `${h}h ago` : `${h}h ${m}m ago`;
+  const d = Math.floor(h / 24);
+  const remH = h % 24;
+  return remH === 0 ? `${d}d ago` : `${d}d ${remH}h ago`;
+}
+
+
 function formatTimeToStart(min: number | null): string {
   if (min == null) return "—";
   if (min < -1) return "live";
@@ -520,6 +541,18 @@ export default async function SignalsPage({
               )}
               {/* Status — only meaningful in All mode (Live filter excludes
                   closed/resolved rows by definition). */}
+              {showStatusCol && (
+                <Th align="right" className="hidden md:table-cell whitespace-nowrap">
+                  <SortHeader
+                    label="Detected"
+                    sortKey="detected_at"
+                    active={sort.key === "detected_at"}
+                    dir={sort.dir}
+                    href={sortHref}
+                    align="right"
+                  />
+                </Th>
+              )}
               {showStatusCol && <Th>Status</Th>}
               {/* Track is admin-only — non-admins still see AI but no track icon. */}
               {isAdmin && <Th>Track</Th>}
@@ -626,6 +659,11 @@ export default async function SignalsPage({
                         {clvBadge(s.clv_pct)}
                       </Td>
                     </>
+                  )}
+                  {showStatusCol && (
+                    <Td align="right" mono muted className="hidden md:table-cell whitespace-nowrap">
+                      {formatAgo(s.detected_at, serverNowMs)}
+                    </Td>
                   )}
                   {showStatusCol && (
                     <Td>
