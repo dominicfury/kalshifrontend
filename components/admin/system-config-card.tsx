@@ -125,6 +125,12 @@ const SIGNAL_FIELD_DEFS: Array<{
     hint: "Drop book quotes older than this from the matcher consensus. With cross-line interpolation handling line drift directly, the cutoff is now about admitting books that briefly lag the poll cycle (rate limit, hiccup) without dropping them as stale. Default 7200 (2h, ~12 cycles of headroom). Lower = stricter (drops lagging books faster).",
     unit: "sec",
   },
+  {
+    key: "watchlist_refresh_interval_sec",
+    label: "Watchlist fast-poll (sec)",
+    hint: "How often the focused refresh loop runs against markets with active +EV signals on Live. Re-polls Kalshi + Odds API for those specific events and re-evaluates the matcher. 30s is the recommended sweet spot — fast invalidation when an edge dies, manageable API cost. Tennis is excluded (Odds API tournament-key rotation makes per-event polling impractical).",
+    unit: "sec",
+  },
 ];
 
 const ACCESS_FIELD_DEFS: Array<{

@@ -49,12 +49,18 @@ function verdict(
 export default async function LiveIndicator() {
   let kalshi: ApiStatusRow | undefined;
   let odds: ApiStatusRow | undefined;
+  let watchlist: ApiStatusRow | undefined;
   let lastK: string | null = null;
   let lastB: string | null = null;
   try {
     const [statuses, h] = await Promise.all([fetchApiStatus(), fetchHealth()]);
     kalshi = statuses.find((s) => s.api === "kalshi");
     odds = statuses.find((s) => s.api === "odds");
+    // Watchlist fast-poll status — refreshes Kalshi + Odds API every 30s
+    // for markets with active +EV signals on Live, then re-runs the
+    // matcher on those markets only. Surfacing freshness here gives the
+    // user a trust signal that the displayed signals are current.
+    watchlist = statuses.find((s) => s.api === "watchlist");
     lastK = h.last_kalshi_poll;
     lastB = h.last_book_poll;
   } catch {
@@ -63,6 +69,7 @@ export default async function LiveIndicator() {
 
   const k = verdict(kalshi, lastK);
   const b = verdict(odds, lastB);
+  const w = verdict(watchlist, null);
 
   return (
     <div className="hidden md:flex items-center gap-4 text-xs font-mono tabular-nums">
@@ -94,6 +101,22 @@ export default async function LiveIndicator() {
           {ago(b.lastSuccessIso)}
         </span>
       </div>
+      {w.tone !== "muted" && (
+        <div
+          className="flex items-center gap-1.5"
+          title={
+            watchlist?.last_error_message && w.tone === "error"
+              ? `Last watchlist refresh failed: ${watchlist.last_error_message}`
+              : "Time since the most recent watchlist fast-poll refresh (Kalshi + books re-polled for markets with active Live signals; default 30s cadence)"
+          }
+        >
+          <StatusDot tone={w.tone} pulse={w.tone === "ok"} />
+          <span className="text-zinc-300">Fast</span>
+          <span className={w.tone === "error" ? "text-rose-300" : "text-zinc-100"}>
+            {ago(w.lastSuccessIso)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
