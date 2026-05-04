@@ -82,8 +82,9 @@ const SignalRowSchema = z.object({
   time_to_start_min: intLike,
   live_polled_at: z.string().nullable(),
   live_quote_age_sec: intLikeNullable,
-  // 1 if a bets row exists for this signal — drives the +track / ✓ tracked
-  // toggle on the dashboard. Computed via LEFT JOIN bets in the query.
+  // 1 if a tracked_signals row exists for this signal — drives the +track /
+  // ✓ tracked toggle on the dashboard. Computed via LEFT JOIN tracked_signals
+  // in the query (legacy `bets` table replaced by tracked_signals marker).
   tracked: intLike,
 });
 
