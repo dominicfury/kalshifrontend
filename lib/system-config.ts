@@ -41,6 +41,12 @@ export const KNOWN_KEYS = {
   SPORT_ENABLED_WNBA: "sport_enabled_wnba",
   SPORT_ENABLED_TENNIS_ATP: "sport_enabled_tennis_atp",
   SPORT_ENABLED_TENNIS_WTA: "sport_enabled_tennis_wta",
+  // Game-proximity buckets shared between backend's HOT/WARM tier
+  // polling and frontend's "best" sort PROXIMITY_BUCKET. Synced via
+  // system_config so an admin tweak hits both layers without a deploy.
+  TIER_HOT_HOURS: "tier_hot_hours",
+  TIER_WARM_HOURS: "tier_warm_hours",
+  ALERT_MARKET_SIDE_COOLDOWN_MIN: "alert_market_side_cooldown_min",
 } as const;
 
 export const DEFAULT_VALUES: Record<string, string> = {
@@ -64,6 +70,9 @@ export const DEFAULT_VALUES: Record<string, string> = {
   [KNOWN_KEYS.SPORT_ENABLED_WNBA]: "1",
   [KNOWN_KEYS.SPORT_ENABLED_TENNIS_ATP]: "1",
   [KNOWN_KEYS.SPORT_ENABLED_TENNIS_WTA]: "1",
+  [KNOWN_KEYS.TIER_HOT_HOURS]: "2",
+  [KNOWN_KEYS.TIER_WARM_HOURS]: "24",
+  [KNOWN_KEYS.ALERT_MARKET_SIDE_COOLDOWN_MIN]: "5",
 };
 
 export async function getInt(key: string, fallback: number): Promise<number> {

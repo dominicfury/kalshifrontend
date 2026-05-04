@@ -334,6 +334,13 @@ export async function fetchRecentSignals(
     where.push("COALESCE(s.edge_pct_after_fees_at_size, s.edge_pct_after_fees) < ?");
     args.push(hugeEdgePct / 100.0);
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
+    // Detection-time depth snapshot — Filter C in the backend rejected
+    // signals below this at insert time, so every row in the table
+    // already passed it once. The watchlist re-evaluates ~30s and
+    // invalidates if depth has since collapsed (Filter C path with
+    // invalidate_prior). So this filter is a belt-and-suspenders
+    // mirror of the snapshot check; current-depth divergence is
+    // bounded by the watchlist cadence + lock.
     where.push("s.yes_book_depth >= ?");
     args.push(minDepth);
     where.push("s.n_books_used >= 2");
@@ -350,6 +357,29 @@ export async function fetchRecentSignals(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
         "JOIN events e ON e.id = km.event_id " +
         "WHERE julianday(e.start_time) > julianday('now'))",
+    );
+    // Soft Live cap on book staleness. Backend Filter A2 rejects at 4h
+    // BUT (a) only on re-evaluation, and (b) without invalidate-prior
+    // semantics historically — meaning a row whose books have gone
+    // quiet since detection used to sit in Live for hours. Use the
+    // admin-tunable book_quote_max_age_sec (default 7200s / 2h) as
+    // the Live cap so a row with a stale book consensus drops off
+    // even when the engine hasn't re-evaluated this market yet.
+    // Applied on the LIVE-COMPUTED book staleness so it tracks
+    // current truth, not the detection snapshot. Value is inlined
+    // (not parameterized) to keep the positional `?` args list aligned
+    // — bookMaxAgeSec is a number from getInt() so there's no
+    // injection surface.
+    const liveBookCapSec = await getInt(KNOWN_KEYS.BOOK_QUOTE_MAX_AGE_SEC, 7200);
+    where.push(
+      "(SELECT CAST((julianday('now') - julianday(MAX(bm.last_price_change_ts))) * 86400 AS INTEGER)" +
+        " FROM book_markets bm" +
+        " JOIN kalshi_markets km3 ON km3.id = s.kalshi_market_id" +
+        " WHERE bm.event_id = km3.event_id" +
+        "   AND bm.market_type = km3.market_type" +
+        "   AND bm.period = km3.period" +
+        "   AND COALESCE(bm.line, -9999) = COALESCE(km3.line, -9999)" +
+        `) <= ${Number(liveBookCapSec)}`,
     );
   } else if (view === "recent") {
     const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
@@ -407,17 +437,62 @@ export async function fetchRecentSignals(
   // last_price_change_ts (= most recent book move = freshest reading).
   // COALESCE on line handles NULL line cases (moneyline/match_winner
   // store -9999 but join cleanliness wants both sides handled).
+  // Read the matcher's max-age for displayed B-stale filtering. Cached
+  // by getInt so this is one cheap roundtrip per request, not per row.
+  const liveBookMaxAgeSec = await getInt(KNOWN_KEYS.BOOK_QUOTE_MAX_AGE_SEC, 7200);
   const LIVE_KALSHI_STALE = `
     CAST((julianday('now') - julianday(km.last_price_change_ts)) * 86400 AS INTEGER)
       AS kalshi_staleness_sec
   `;
+  // Align with the matcher's consensus exclusions so the displayed B
+  // stale matches what the engine actually consumes:
+  //   - book_quote_max_age_sec floor — quotes older than this are
+  //     dropped from devig and shouldn't lower the displayed staleness.
+  //   - bad-vig books (implied_sum > 1.50) are dropped entirely. We
+  //     approximate that here by joining to the latest book_quote per
+  //     (book_market, side) and filtering on the per-line vig sum.
+  // The full matcher filter (including cross-line interpolation) is
+  // expensive to mirror exactly; this catches the two top sources of
+  // displayed/computed B-stale divergence.
+  // liveBookMaxAgeSec is inlined (not a `?` param) because it doesn't
+  // vary per-row and avoids re-shuffling the positional args list.
   const LIVE_BOOK_STALE = `
     (SELECT CAST((julianday('now') - julianday(MAX(bm.last_price_change_ts))) * 86400 AS INTEGER)
      FROM book_markets bm
      WHERE bm.event_id = km.event_id
        AND bm.market_type = km.market_type
        AND bm.period = km.period
-       AND COALESCE(bm.line, -9999) = COALESCE(km.line, -9999))
+       AND COALESCE(bm.line, -9999) = COALESCE(km.line, -9999)
+       AND EXISTS (
+         SELECT 1 FROM book_quotes bq2
+         WHERE bq2.book_market_id = bm.id
+           AND bq2.polled_at >= datetime('now', '-${liveBookMaxAgeSec} seconds')
+       )
+       AND bm.book NOT IN (
+         SELECT b1.book FROM book_markets b1
+         JOIN book_markets b2 ON b1.event_id = b2.event_id
+           AND b1.market_type = b2.market_type
+           AND b1.period = b2.period
+           AND COALESCE(b1.line, -9999) = COALESCE(b2.line, -9999)
+           AND b1.book = b2.book
+           AND b1.side < b2.side
+         JOIN (
+           SELECT book_market_id, decimal_odds,
+                  ROW_NUMBER() OVER (PARTITION BY book_market_id ORDER BY polled_at DESC) AS rn
+           FROM book_quotes
+         ) q1 ON q1.book_market_id = b1.id AND q1.rn = 1
+         JOIN (
+           SELECT book_market_id, decimal_odds,
+                  ROW_NUMBER() OVER (PARTITION BY book_market_id ORDER BY polled_at DESC) AS rn
+           FROM book_quotes
+         ) q2 ON q2.book_market_id = b2.id AND q2.rn = 1
+         WHERE b1.event_id = km.event_id
+           AND b1.market_type = km.market_type
+           AND b1.period = km.period
+           AND COALESCE(b1.line, -9999) = COALESCE(km.line, -9999)
+           AND q1.decimal_odds > 1.0 AND q2.decimal_odds > 1.0
+           AND ((1.0 / q1.decimal_odds) + (1.0 / q2.decimal_odds)) > 1.50
+       ))
       AS book_staleness_sec
   `;
 
@@ -490,13 +565,22 @@ export async function fetchRecentSignals(
   // without having to sort one column then squint at the other.
   //
   // Started/past games go to the LAST bucket so they don't pollute the
-  // top of Recent / Audit — a CLOSED row from 11h ago shouldn't share a bucket
-  // with a market tipping off in 30 min.
+  // top of Recent / Audit — a CLOSED row from 11h ago shouldn't share a
+  // bucket with a market tipping off in 30 min.
+  //
+  // Bucket cutoffs come from system_config (tier_hot_hours,
+  // tier_warm_hours) so they stay in sync with backend's sport-tier
+  // polling (poll_once.HOT_HOURS / WARM_HOURS). Without the shared
+  // source one layer's tweak silently drifted from the other.
+  const tierHotHours = await getInt(KNOWN_KEYS.TIER_HOT_HOURS, 2);
+  const tierWarmHours = await getInt(KNOWN_KEYS.TIER_WARM_HOURS, 24);
+  const tierHotMin = Math.max(0, Number(tierHotHours)) * 60;
+  const tierWarmMin = Math.max(tierHotMin, Number(tierWarmHours) * 60);
   const PROXIMITY_BUCKET = `
     CASE
       WHEN (julianday(e.start_time) - julianday('now')) * 1440 < 0 THEN 3
-      WHEN (julianday(e.start_time) - julianday('now')) * 1440 < 120 THEN 0
-      WHEN (julianday(e.start_time) - julianday('now')) * 1440 < 1440 THEN 1
+      WHEN (julianday(e.start_time) - julianday('now')) * 1440 < ${tierHotMin} THEN 0
+      WHEN (julianday(e.start_time) - julianday('now')) * 1440 < ${tierWarmMin} THEN 1
       ELSE 2
     END
   `;
@@ -519,18 +603,33 @@ export async function fetchRecentSignals(
     args,
   });
   // Validate at the DB boundary: the libsql column types are erased once
-  // serialized and a backend column rename / type drift would silently corrupt
-  // the table (string values would lexicographically sort, etc.). Skip rows
-  // that don't parse rather than tearing down the whole page — the SR will
-  // log them so the bad data is visible without taking down /signals.
+  // serialized and a backend column rename / type drift would silently
+  // corrupt the table. Skip rows that don't parse rather than tearing
+  // down the whole page — but ALWAYS log so production drops are visible
+  // (silent dev-only logging meant a schema drift could shrink Live with
+  // no signal to anyone, MED bug 2026-05-04).
   const validated: SignalRow[] = [];
+  let n_dropped = 0;
+  let first_error_issues: unknown = null;
   for (const raw of result.rows) {
     const parsed = SignalRowSchema.safeParse(raw);
     if (parsed.success) {
       validated.push(parsed.data as SignalRow);
-    } else if (process.env.NODE_ENV !== "production") {
-      console.warn("[fetchRecentSignals] dropped malformed row", parsed.error.issues);
+    } else {
+      n_dropped += 1;
+      if (first_error_issues == null) first_error_issues = parsed.error.issues;
     }
+  }
+  if (n_dropped > 0) {
+    // Single aggregated error — one parse failure usually means schema
+    // drift across many rows so we don't want N log lines, just one
+    // with a sample. console.error so the host's structured-log capture
+    // (Vercel) flags it as an error rather than silently bucketing it.
+    console.error("[fetchRecentSignals] dropped malformed rows", {
+      n_dropped,
+      n_kept: validated.length,
+      sample_issues: first_error_issues,
+    });
   }
   return validated;
 }
@@ -554,6 +653,15 @@ export async function fetchLiveStats(): Promise<LiveStats> {
              ) AS rn
       FROM signals s
       WHERE s.detected_at >= datetime('now', '-15 minutes')
+        -- Mirror Live's actionable-only semantics: the empty-state
+        -- counter shouldn't claim "+EV detection in last 15m" when
+        -- the only thing logged was a calibration-tier ghost that
+        -- Live hides. Without this, the empty state misled users
+        -- into thinking Live had something to show (drift 4 fix
+        -- 2026-05-04).
+        AND s.is_calibration_only = 0
+        AND s.invalidated_at IS NULL
+        AND s.closing_kalshi_yes_price IS NULL
     ),
     next_event AS (
       SELECT sport,
