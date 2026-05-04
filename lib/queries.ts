@@ -358,29 +358,15 @@ export async function fetchRecentSignals(
         "JOIN events e ON e.id = km.event_id " +
         "WHERE julianday(e.start_time) > julianday('now'))",
     );
-    // Soft Live cap on book staleness. Backend Filter A2 rejects at 4h
-    // BUT (a) only on re-evaluation, and (b) without invalidate-prior
-    // semantics historically — meaning a row whose books have gone
-    // quiet since detection used to sit in Live for hours. Use the
-    // admin-tunable book_quote_max_age_sec (default 7200s / 2h) as
-    // the Live cap so a row with a stale book consensus drops off
-    // even when the engine hasn't re-evaluated this market yet.
-    // Applied on the LIVE-COMPUTED book staleness so it tracks
-    // current truth, not the detection snapshot. Value is inlined
-    // (not parameterized) to keep the positional `?` args list aligned
-    // — bookMaxAgeSec is a number from getInt() so there's no
-    // injection surface.
-    const liveBookCapSec = await getInt(KNOWN_KEYS.BOOK_QUOTE_MAX_AGE_SEC, 7200);
-    where.push(
-      "(SELECT CAST((julianday('now') - julianday(MAX(bm.last_price_change_ts))) * 86400 AS INTEGER)" +
-        " FROM book_markets bm" +
-        " JOIN kalshi_markets km3 ON km3.id = s.kalshi_market_id" +
-        " WHERE bm.event_id = km3.event_id" +
-        "   AND bm.market_type = km3.market_type" +
-        "   AND bm.period = km3.period" +
-        "   AND COALESCE(bm.line, -9999) = COALESCE(km3.line, -9999)" +
-        `) <= ${Number(liveBookCapSec)}`,
-    );
+    // Soft Live cap on book staleness was attempted via a correlated
+    // subquery here but it ran one full book_markets scan per signals
+    // row and made the page load slow enough to look broken. The
+    // watchlist's invalidate-on-stale path (Filter A1/A2 → invalidate
+    // both sides) now covers this case backend-side: a market whose
+    // books have gone quiet for >4h gets the prior live row stamped
+    // invalidated_at on the next eval. We accept up to one watchlist
+    // cycle (~30s) of "books just went stale, row not yet hidden"
+    // rather than re-creating the slow query.
   } else if (view === "recent") {
     const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
     const minDepth = await getInt(KNOWN_KEYS.MIN_BOOK_DEPTH_DOLLARS, 50);
@@ -437,62 +423,25 @@ export async function fetchRecentSignals(
   // last_price_change_ts (= most recent book move = freshest reading).
   // COALESCE on line handles NULL line cases (moneyline/match_winner
   // store -9999 but join cleanliness wants both sides handled).
-  // Read the matcher's max-age for displayed B-stale filtering. Cached
-  // by getInt so this is one cheap roundtrip per request, not per row.
-  const liveBookMaxAgeSec = await getInt(KNOWN_KEYS.BOOK_QUOTE_MAX_AGE_SEC, 7200);
   const LIVE_KALSHI_STALE = `
     CAST((julianday('now') - julianday(km.last_price_change_ts)) * 86400 AS INTEGER)
       AS kalshi_staleness_sec
   `;
-  // Align with the matcher's consensus exclusions so the displayed B
-  // stale matches what the engine actually consumes:
-  //   - book_quote_max_age_sec floor — quotes older than this are
-  //     dropped from devig and shouldn't lower the displayed staleness.
-  //   - bad-vig books (implied_sum > 1.50) are dropped entirely. We
-  //     approximate that here by joining to the latest book_quote per
-  //     (book_market, side) and filtering on the per-line vig sum.
-  // The full matcher filter (including cross-line interpolation) is
-  // expensive to mirror exactly; this catches the two top sources of
-  // displayed/computed B-stale divergence.
-  // liveBookMaxAgeSec is inlined (not a `?` param) because it doesn't
-  // vary per-row and avoids re-shuffling the positional args list.
+  // The B-stale subquery scans book_markets for the same (event,
+  // market_type, period, line) tuple as the kalshi market and takes
+  // MAX(last_price_change_ts). This is a slight over-estimate vs the
+  // matcher's consensus (which excludes bad-vig books and quotes past
+  // book_quote_max_age_sec) but mirroring those exclusions here meant
+  // re-running ROW_NUMBER() window functions per signals row and
+  // visibly slowing page load. The cosmetic divergence is acceptable;
+  // the matcher's actual reject path is the source of truth.
   const LIVE_BOOK_STALE = `
     (SELECT CAST((julianday('now') - julianday(MAX(bm.last_price_change_ts))) * 86400 AS INTEGER)
      FROM book_markets bm
      WHERE bm.event_id = km.event_id
        AND bm.market_type = km.market_type
        AND bm.period = km.period
-       AND COALESCE(bm.line, -9999) = COALESCE(km.line, -9999)
-       AND EXISTS (
-         SELECT 1 FROM book_quotes bq2
-         WHERE bq2.book_market_id = bm.id
-           AND bq2.polled_at >= datetime('now', '-${liveBookMaxAgeSec} seconds')
-       )
-       AND bm.book NOT IN (
-         SELECT b1.book FROM book_markets b1
-         JOIN book_markets b2 ON b1.event_id = b2.event_id
-           AND b1.market_type = b2.market_type
-           AND b1.period = b2.period
-           AND COALESCE(b1.line, -9999) = COALESCE(b2.line, -9999)
-           AND b1.book = b2.book
-           AND b1.side < b2.side
-         JOIN (
-           SELECT book_market_id, decimal_odds,
-                  ROW_NUMBER() OVER (PARTITION BY book_market_id ORDER BY polled_at DESC) AS rn
-           FROM book_quotes
-         ) q1 ON q1.book_market_id = b1.id AND q1.rn = 1
-         JOIN (
-           SELECT book_market_id, decimal_odds,
-                  ROW_NUMBER() OVER (PARTITION BY book_market_id ORDER BY polled_at DESC) AS rn
-           FROM book_quotes
-         ) q2 ON q2.book_market_id = b2.id AND q2.rn = 1
-         WHERE b1.event_id = km.event_id
-           AND b1.market_type = km.market_type
-           AND b1.period = km.period
-           AND COALESCE(b1.line, -9999) = COALESCE(km.line, -9999)
-           AND q1.decimal_odds > 1.0 AND q2.decimal_odds > 1.0
-           AND ((1.0 / q1.decimal_odds) + (1.0 / q2.decimal_odds)) > 1.50
-       ))
+       AND COALESCE(bm.line, -9999) = COALESCE(km.line, -9999))
       AS book_staleness_sec
   `;
 
