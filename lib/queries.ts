@@ -416,9 +416,46 @@ export async function fetchRecentSignals(
       AS book_staleness_sec
   `;
 
-  // Dedup: collapse to one row per (market, side) for Live and Recent.
-  // Audit returns every detection so the admin can analyze edge persistence
-  // / heartbeat cadence on a single market.
+  // Dedup partition. Two-tier:
+  //   1. Equivalent-bet collapse for binary markets where Kalshi posts
+  //      a separate contract per side: moneyline (HOME contract + AWAY
+  //      contract for the same game) and tennis match_winner (PLAYER_A
+  //      contract + PLAYER_B contract). Each event has FOUR (km, side)
+  //      tuples — HOME-yes, HOME-no, AWAY-yes, AWAY-no — but only TWO
+  //      economic outcomes (bet HOME or bet AWAY). HOME-yes ≡ AWAY-no
+  //      and HOME-no ≡ AWAY-yes. Without dedup, every binary moneyline
+  //      opportunity surfaces as up to 4 redundant rows in Live; with
+  //      it, 2 rows (one per direction).
+  //
+  //      The partition key here folds equivalent bets to the same key
+  //      via canonical bet_target. Tiebreak ORDER BY edge DESC picks
+  //      whichever Kalshi contract gives the better price — Kalshi
+  //      sometimes prices the two contracts asymmetrically (e.g. DET
+  //      market YES at 0.55 vs BOS market NO at 0.59 are both bets on
+  //      DET, but DET YES has 4¢ more edge). Detected_at DESC tiebreaks
+  //      to most-recent so heartbeat refreshes don't flicker.
+  //
+  //   2. Standard (market_id, side) collapse for everything else
+  //      (totals, period_total, spread, runline, puckline). These either
+  //      have no inverse Kalshi contract (totals are over-only by
+  //      normalizer convention) or the line-storage convention isn't
+  //      verified to canonicalize across home/away contracts. Falls
+  //      back to the original behavior — no regression.
+  const PARTITION_KEY = `
+    CASE
+      WHEN km.market_type IN ('moneyline', 'match_winner') THEN
+        'eq:' || km.event_id || ':' || km.market_type || ':' || (
+          CASE
+            WHEN s.side = 'yes' THEN km.side
+            WHEN s.side = 'no' AND km.side = 'home' THEN 'away'
+            WHEN s.side = 'no' AND km.side = 'away' THEN 'home'
+          END
+        )
+      ELSE
+        'orig:' || s.kalshi_market_id || ':' || s.side
+    END
+  `;
+
   const baseSql = view === "audit"
     ? `
         SELECT s.id, s.detected_at,
@@ -447,10 +484,11 @@ export async function fetchRecentSignals(
         WITH ranked AS (
           SELECT s.*,
                  ROW_NUMBER() OVER (
-                   PARTITION BY s.kalshi_market_id, s.side
-                   ORDER BY s.detected_at DESC
+                   PARTITION BY ${PARTITION_KEY}
+                   ORDER BY s.edge_pct_after_fees DESC, s.detected_at DESC
                  ) AS rn
           FROM signals s
+          JOIN kalshi_markets km ON km.id = s.kalshi_market_id
           ${LIVE_QUOTE_JOIN}
           ${whereSql}
         )
