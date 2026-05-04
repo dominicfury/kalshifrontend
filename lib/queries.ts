@@ -250,13 +250,20 @@ export async function fetchRecentSignals(
     args.push(filters.sport);
   }
   // Always: hide signals whose underlying game started > 12h ago, even
-  // in any view (Live / Recent / Audit). The rows stay in the DB (the /clv tab queries
-  // run their own SQL and still see them), but the live ledger has no
-  // reason to display week-old closed signals.
+  // in any view (Live / Recent / Audit). The rows stay in the DB (the /clv
+  // tab queries run their own SQL and still see them), but the live ledger
+  // has no reason to display week-old closed signals.
+  //
+  // julianday() coercion: events.start_time is stored as `2026-05-04T20:00:00Z`
+  // (T-separator, Z suffix) while datetime('now') yields `2026-05-04 18:00:00`
+  // (space, no suffix). A raw TEXT comparison hits position-10 char mismatch
+  // (`T` 0x54 > ` ` 0x20) and reads same-day events as ALWAYS in the future,
+  // so the comparison silently breaks. julianday() converts both sides to
+  // numeric Julian-day-fractions and compares correctly.
   where.push(
     "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
       "JOIN events e ON e.id = km.event_id " +
-      "WHERE e.start_time > datetime('now', '-12 hours'))",
+      "WHERE julianday(e.start_time) > julianday('now', '-12 hours'))",
   );
   // Three view modes — see SignalFilters.view for semantics.
   //
@@ -299,6 +306,12 @@ export async function fetchRecentSignals(
   const view: SignalView = filters.view ?? "live";
   if (view === "live") {
     const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
+    // Mirror the backend's admin-tunable depth gate. If admin lowers
+    // min_book_depth_dollars via /settings to surface thinner-book
+    // candidates, the backend writes them — Live must show them too,
+    // not silently hide via a hardcoded threshold. Falls back to the
+    // long-standing default 50.
+    const minDepth = await getInt(KNOWN_KEYS.MIN_BOOK_DEPTH_DOLLARS, 50);
     where.push("s.closing_kalshi_yes_price IS NULL");
     where.push("s.invalidated_at IS NULL");
     // Exclude calibration rows (sub-actionable edge logged for CLV
@@ -306,24 +319,41 @@ export async function fetchRecentSignals(
     // thresholds — a row can be calibration-tagged when one leg passed
     // 0.5% but the other didn't, which the size filter alone would miss.
     where.push("s.is_calibration_only = 0");
-    where.push("s.edge_pct_after_fees < ?");
+    // Huge-edge cutoff applied to the AT-SIZE edge (the realistic
+    // fillable number), not the touch edge. A signal with touch=8% but
+    // realistic at-size=3% is a legitimate "thin top tick" pattern, not
+    // a "data bug" — hiding it via the touch comparison was over-
+    // rejecting. COALESCE: fall back to touch when at-size is null
+    // (rare; book empty during walk).
+    where.push("COALESCE(s.edge_pct_after_fees_at_size, s.edge_pct_after_fees) < ?");
     args.push(hugeEdgePct / 100.0);
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
-    where.push("s.yes_book_depth >= 50");
+    where.push("s.yes_book_depth >= ?");
+    args.push(minDepth);
     where.push("s.n_books_used >= 2");
-    where.push("lq.polled_at >= datetime('now', '-8 minutes')");
+    // Live-quote recency cap. Widened from 8m to 15m: an 8m cliff
+    // would hide ALL signals during any Kalshi poll outage > 8m, even
+    // though the underlying signal data is still valid. 15m absorbs
+    // most transient outages (rate limit, 502, scheduler hiccup) while
+    // still hiding genuinely-abandoned markets. Both sides of this
+    // comparison are space-format (kalshi_quotes.polled_at default is
+    // SQL datetime('now'); RHS is also datetime('now', ...)), so this
+    // doesn't need julianday() coercion.
+    where.push("lq.polled_at >= datetime('now', '-15 minutes')");
     where.push(
       "s.kalshi_market_id IN (SELECT km.id FROM kalshi_markets km " +
         "JOIN events e ON e.id = km.event_id " +
-        "WHERE e.start_time > datetime('now'))",
+        "WHERE julianday(e.start_time) > julianday('now'))",
     );
   } else if (view === "recent") {
     const hugeEdgePct = await getInt(KNOWN_KEYS.LIVE_HUGE_EDGE_CUTOFF_PCT, 7);
+    const minDepth = await getInt(KNOWN_KEYS.MIN_BOOK_DEPTH_DOLLARS, 50);
     where.push("s.is_calibration_only = 0");
-    where.push("s.edge_pct_after_fees < ?");
+    where.push("COALESCE(s.edge_pct_after_fees_at_size, s.edge_pct_after_fees) < ?");
     args.push(hugeEdgePct / 100.0);
     where.push("s.edge_pct_after_fees_at_size >= 0.005");
-    where.push("s.yes_book_depth >= 50");
+    where.push("s.yes_book_depth >= ?");
+    args.push(minDepth);
     where.push("s.n_books_used >= 2");
     where.push("s.detected_at >= datetime('now', '-24 hours')");
   }
@@ -521,7 +551,7 @@ export async function fetchLiveStats(): Promise<LiveStats> {
       SELECT sport,
              CAST((julianday(start_time) - julianday('now')) * 1440 AS INTEGER) AS min_to_start
       FROM events
-      WHERE start_time > datetime('now')
+      WHERE julianday(start_time) > julianday('now')
       ORDER BY start_time ASC
       LIMIT 1
     )
@@ -631,8 +661,8 @@ async function _fetchSportActivityImpl(): Promise<SportActivity[]> {
         COUNT(*) AS events_24h,
         MIN((julianday(start_time) - julianday('now')) * 24) AS hours_to_next
       FROM events
-      WHERE start_time >= datetime('now')
-        AND start_time <= datetime('now', '+' || ? || ' hours')
+      WHERE julianday(start_time) >= julianday('now')
+        AND julianday(start_time) <= julianday('now', '+' || ? || ' hours')
       GROUP BY sport
     `,
     args: [SPORT_SOON_HOURS],
@@ -1013,7 +1043,7 @@ export async function fetchUnmatchedBreakdown(): Promise<UnmatchedBreakdownRow[]
     FROM kalshi_markets km
     JOIN events e ON e.id = km.event_id
     WHERE km.status = 'active'
-      AND e.start_time > datetime('now')
+      AND julianday(e.start_time) > julianday('now')
       AND NOT EXISTS (
         SELECT 1 FROM book_markets bm
         WHERE bm.event_id = km.event_id
@@ -1102,7 +1132,7 @@ export async function fetchHealth(): Promise<HealthSnapshot> {
         SUM(CASE WHEN alert_sent = 1 THEN 1 ELSE 0 END) AS alerted
       FROM signals
     `),
-    db.execute(`SELECT COUNT(*) FROM events WHERE start_time >= datetime('now', '-1 day')`),
+    db.execute(`SELECT COUNT(*) FROM events WHERE julianday(start_time) >= julianday('now', '-1 day')`),
     db.execute(`SELECT COUNT(*) FROM kalshi_markets WHERE status = 'active'`),
     db.execute(`SELECT COUNT(*) FROM unmatched_kalshi_markets`),
     db.execute(`SELECT COUNT(*) FROM signal_anomalies`),
@@ -1111,7 +1141,7 @@ export async function fetchHealth(): Promise<HealthSnapshot> {
       FROM kalshi_markets km
       JOIN events e ON e.id = km.event_id
       WHERE km.status = 'active'
-        AND e.start_time > datetime('now')
+        AND julianday(e.start_time) > julianday('now')
         AND NOT EXISTS (
           SELECT 1 FROM book_markets bm
           WHERE bm.event_id = km.event_id
