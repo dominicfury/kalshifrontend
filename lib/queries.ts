@@ -69,6 +69,7 @@ const SignalRowSchema = z.object({
   invalidated_at: z.string().nullable(),
   n_books_interpolated: intLike,
   is_calibration_only: intLike,
+  event_id: intLike,
   ticker: z.string(),
   market_type: z.string(),
   period: z.string(),
@@ -127,6 +128,10 @@ export interface SignalRow {
   // visible in Audit with a "calib" badge so the admin can distinguish
   // these from actionable rows.
   is_calibration_only: number;
+  // events.id — used by the frontend to group Live rows under one
+  // collapsible per-game header. Multiple signals (different markets,
+  // sides) on the same event share an event_id.
+  event_id: number;
   ticker: string;
   market_type: string;
   period: string;
@@ -416,46 +421,11 @@ export async function fetchRecentSignals(
       AS book_staleness_sec
   `;
 
-  // Dedup partition. Two-tier:
-  //   1. Equivalent-bet collapse for binary markets where Kalshi posts
-  //      a separate contract per side: moneyline (HOME contract + AWAY
-  //      contract for the same game) and tennis match_winner (PLAYER_A
-  //      contract + PLAYER_B contract). Each event has FOUR (km, side)
-  //      tuples — HOME-yes, HOME-no, AWAY-yes, AWAY-no — but only TWO
-  //      economic outcomes (bet HOME or bet AWAY). HOME-yes ≡ AWAY-no
-  //      and HOME-no ≡ AWAY-yes. Without dedup, every binary moneyline
-  //      opportunity surfaces as up to 4 redundant rows in Live; with
-  //      it, 2 rows (one per direction).
-  //
-  //      The partition key here folds equivalent bets to the same key
-  //      via canonical bet_target. Tiebreak ORDER BY edge DESC picks
-  //      whichever Kalshi contract gives the better price — Kalshi
-  //      sometimes prices the two contracts asymmetrically (e.g. DET
-  //      market YES at 0.55 vs BOS market NO at 0.59 are both bets on
-  //      DET, but DET YES has 4¢ more edge). Detected_at DESC tiebreaks
-  //      to most-recent so heartbeat refreshes don't flicker.
-  //
-  //   2. Standard (market_id, side) collapse for everything else
-  //      (totals, period_total, spread, runline, puckline). These either
-  //      have no inverse Kalshi contract (totals are over-only by
-  //      normalizer convention) or the line-storage convention isn't
-  //      verified to canonicalize across home/away contracts. Falls
-  //      back to the original behavior — no regression.
-  const PARTITION_KEY = `
-    CASE
-      WHEN km.market_type IN ('moneyline', 'match_winner') THEN
-        'eq:' || km.event_id || ':' || km.market_type || ':' || (
-          CASE
-            WHEN s.side = 'yes' THEN km.side
-            WHEN s.side = 'no' AND km.side = 'home' THEN 'away'
-            WHEN s.side = 'no' AND km.side = 'away' THEN 'home'
-          END
-        )
-      ELSE
-        'orig:' || s.kalshi_market_id || ':' || s.side
-    END
-  `;
-
+  // Dedup: collapse heartbeat refreshes by (market_id, side). Audit
+  // keeps every detection row so admin can see edge persistence.
+  // Equivalent-bet collapse (HOME-yes ≡ AWAY-no) is intentionally NOT
+  // applied here — both rows surface separately, and the Live view
+  // visually groups them by event in the frontend instead.
   const baseSql = view === "audit"
     ? `
         SELECT s.id, s.detected_at,
@@ -469,7 +439,7 @@ export async function fetchRecentSignals(
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl, s.invalidated_at,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
-               e.home_team, e.away_team, e.start_time, e.sport,
+               e.id AS event_id, e.home_team, e.away_team, e.start_time, e.sport,
                CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min,
                ${LIVE_QUOTE_SELECT},
                ${TRACKED_SELECT}
@@ -484,11 +454,10 @@ export async function fetchRecentSignals(
         WITH ranked AS (
           SELECT s.*,
                  ROW_NUMBER() OVER (
-                   PARTITION BY ${PARTITION_KEY}
-                   ORDER BY s.edge_pct_after_fees DESC, s.detected_at DESC
+                   PARTITION BY s.kalshi_market_id, s.side
+                   ORDER BY s.detected_at DESC
                  ) AS rn
           FROM signals s
-          JOIN kalshi_markets km ON km.id = s.kalshi_market_id
           ${LIVE_QUOTE_JOIN}
           ${whereSql}
         )
@@ -503,7 +472,7 @@ export async function fetchRecentSignals(
                s.closing_kalshi_yes_price, s.clv_pct, s.resolved_outcome,
                s.hypothetical_pnl, s.invalidated_at,
                km.ticker, km.market_type, km.period, km.line, km.raw_title, km.side AS market_side,
-               e.home_team, e.away_team, e.start_time, e.sport,
+               e.id AS event_id, e.home_team, e.away_team, e.start_time, e.sport,
                CAST((julianday(e.start_time) - julianday('now')) * 1440 AS INTEGER) AS time_to_start_min,
                ${LIVE_QUOTE_SELECT},
                ${TRACKED_SELECT}
