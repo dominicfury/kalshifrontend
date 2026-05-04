@@ -127,8 +127,14 @@ const SIGNAL_FIELD_DEFS: Array<{
   },
   {
     key: "watchlist_refresh_interval_sec",
-    label: "Watchlist fast-poll (sec)",
-    hint: "How often the focused refresh loop runs against markets with active +EV signals on Live. Re-polls Kalshi + Odds API for those specific events and re-evaluates the matcher. 30s is the recommended sweet spot — fast invalidation when an edge dies, manageable API cost. Tennis is excluded (Odds API tournament-key rotation makes per-event polling impractical).",
+    label: "Watchlist Kalshi (sec)",
+    hint: "How often the watchlist re-polls Kalshi for markets with active +EV signals on Live. Free upstream (no quota), volatile side — most invalidation events come from Kalshi catching up to fair, so this is what catches them. 30s recommended.",
+    unit: "sec",
+  },
+  {
+    key: "watchlist_books_interval_sec",
+    label: "Watchlist Books (sec)",
+    hint: "How often the watchlist re-polls the Odds API per-event endpoint for non-tennis watchlist events. Each refresh costs ~6 credits per event. 90s default trades 60s of book staleness for ~3x credit savings vs 30s — books move slower than Kalshi so this is a smart split. Lower = freshest book consensus on Live; higher = better quota headroom.",
     unit: "sec",
   },
 ];
